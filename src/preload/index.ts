@@ -13,6 +13,8 @@ const api = {
   setPanelMode: () => ipcRenderer.invoke('window:setPanelMode'),
   toggleMode: () => ipcRenderer.invoke('window:toggleMode'),
   moveWindowBy: (dx: number, dy: number) => ipcRenderer.invoke('window:moveBy', dx, dy),
+  moveWindowTo: (x: number, y: number) => ipcRenderer.invoke('window:moveTo', x, y),
+  getWindowPosition: () => ipcRenderer.invoke('window:getPosition') as Promise<[number, number]>,
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   toggleAlwaysOnTop: () => ipcRenderer.invoke('window:toggleAlwaysOnTop'),
 

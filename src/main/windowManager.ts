@@ -81,7 +81,15 @@ export function moveWindowBy(dx: number, dy: number): void {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   const newX = Math.max(0, Math.min(width - 200, x + dx))
   const newY = Math.max(0, Math.min(height - 200, y + dy))
-  mainWindow.setPosition(newX, newY)
+  mainWindow.setPosition(Math.round(newX), Math.round(newY))
+}
+
+export function moveWindowTo(x: number, y: number): void {
+  if (!mainWindow || !isPetMode) return
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const newX = Math.max(0, Math.min(width - 200, x))
+  const newY = Math.max(0, Math.min(height - 200, y))
+  mainWindow.setPosition(Math.round(newX), Math.round(newY))
 }
 
 export function getMainWindow(): BrowserWindow | null {

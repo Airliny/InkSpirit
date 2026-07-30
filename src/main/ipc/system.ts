@@ -25,4 +25,13 @@ export function registerSystemHandlers(): void {
   ipcMain.handle('window:moveBy', (_event, dx: number, dy: number) => {
     moveWindowBy(dx, dy)
   })
+
+  ipcMain.handle('window:moveTo', (_event, x: number, y: number) => {
+    moveWindowTo(x, y)
+  })
+
+  ipcMain.handle('window:getPosition', () => {
+    const win = getMainWindow()
+    return win ? win.getPosition() as [number, number] : [0, 0]
+  })
 }

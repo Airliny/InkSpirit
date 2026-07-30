@@ -19,6 +19,7 @@ export function PetView({ modelSource, state, onClick, onContextMenu }: PetViewP
   const walkRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const dragging = useRef(false)
   const startPos = useRef({ x: 0, y: 0 })
+  const winPos = useRef({ x: 0, y: 0 })
 
   useEffect(() => { setCurrentState(state) }, [state])
 
@@ -52,10 +53,12 @@ export function PetView({ modelSource, state, onClick, onContextMenu }: PetViewP
     return () => { u1(); u2(); u3(); u4(); u5(); u6() }
   }, [showBubble])
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
     if (e.button === 2) { onContextMenu(e); return }
     dragging.current = false
     startPos.current = { x: e.screenX, y: e.screenY }
+    const [wx, wy] = await window.inkAPI.getWindowPosition()
+    winPos.current = { x: wx, y: wy }
   }, [onContextMenu])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -66,8 +69,7 @@ export function PetView({ modelSource, state, onClick, onContextMenu }: PetViewP
       dragging.current = true
     }
     if (dragging.current) {
-      window.inkAPI.moveWindowBy(dx, dy)
-      startPos.current = { x: e.screenX, y: e.screenY }
+      window.inkAPI.moveWindowTo(winPos.current.x + dx, winPos.current.y + dy)
     }
   }, [])
 
