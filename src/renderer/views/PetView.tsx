@@ -17,6 +17,8 @@ export function PetView({ modelSource, state, onClick, onContextMenu }: PetViewP
   const [bubbles, setBubbles] = useState<Bubble[]>([])
   const [currentState, setCurrentState] = useState<AnimationState>(state)
   const walkRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const dragging = useRef(false)
+  const startPos = useRef({ x: 0, y: 0 })
 
   useEffect(() => { setCurrentState(state) }, [state])
 
@@ -50,8 +52,39 @@ export function PetView({ modelSource, state, onClick, onContextMenu }: PetViewP
     return () => { u1(); u2(); u3(); u4(); u5(); u6() }
   }, [showBubble])
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button === 2) { onContextMenu(e); return }
+    dragging.current = false
+    startPos.current = { x: e.clientX, y: e.clientY }
+  }, [onContextMenu])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!(e.buttons & 1)) return
+    const dx = e.clientX - startPos.current.x
+    const dy = e.clientY - startPos.current.y
+    if (!dragging.current && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+      dragging.current = true
+    }
+    if (dragging.current) {
+      window.inkAPI.moveWindowBy(dx, dy)
+      startPos.current = { x: e.clientX, y: e.clientY }
+    }
+  }, [])
+
+  const handleMouseUp = useCallback(() => {
+    if (!dragging.current) {
+      onClick()
+    }
+    dragging.current = false
+  }, [onClick])
+
   return (
-    <div className="pet-view" onClick={onClick} onContextMenu={onContextMenu}>
+    <div
+      className="pet-view"
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+    >
       {modelSource.type === 'live2d' ? (
         <Live2DView modelPath={modelSource.live2d.modelPath} width={180} height={200} />
       ) : (

@@ -4,7 +4,6 @@ import { setConfig, getConfig } from '../../core/config'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { pathToFileURL } from 'url'
 import { getMainWindow } from '../windowManager'
 
 export function registerDataHandlers(): void {
@@ -63,7 +62,7 @@ export function registerDataHandlers(): void {
     const destPath = path.join(avatarsDir, destName)
     fs.copyFileSync(srcPath, destPath)
 
-    const fileUrl = destPath.startsWith('file://') ? destPath : pathToFileURL(destPath).href
+    const fileUrl = `local://${encodeURIComponent(destPath)}`
     setConfig(`sprite_${spriteKey}`, fileUrl)
 
     return { success: true, path: fileUrl }
@@ -85,7 +84,7 @@ export function registerDataHandlers(): void {
     const destPath = path.join(avatarsDir, destName)
     fs.copyFileSync(srcPath, destPath)
 
-    const fileUrl = destPath.startsWith('file://') ? destPath : pathToFileURL(destPath).href
+    const fileUrl = `local://${encodeURIComponent(destPath)}`
     setConfig(`sprite_${spriteKey}`, fileUrl)
 
     return { success: true, path: fileUrl }
@@ -96,7 +95,19 @@ export function registerDataHandlers(): void {
     const keys = ['idle', 'walk', 'sleep', 'sit', 'stretch', 'yawn', 'surprised', 'happy', 'sad', 'love']
     const sprites: Record<string, string | null> = {}
     for (const key of keys) {
-      sprites[key] = getConfig(`sprite_${key}`)
+      const val = getConfig(`sprite_${key}`)
+      if (val) {
+        if (val.startsWith('file://')) {
+          const filePath = val.replace(/^file:\/\/\/?/, '')
+          const normalized = `local://${encodeURIComponent(filePath)}`
+          setConfig(`sprite_${key}`, normalized)
+          sprites[key] = normalized
+        } else {
+          sprites[key] = val
+        }
+      } else {
+        sprites[key] = null
+      }
     }
     return sprites
   })

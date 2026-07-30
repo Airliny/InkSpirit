@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, protocol, net } from 'electron'
 import { createMainWindow, getMainWindow } from './windowManager'
 import { createTray } from './trayManager'
 import { registerIpcHandlers } from './ipc/index'
@@ -9,6 +9,7 @@ import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTrac
 import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay } from '../core/soul/emotion'
 import { getRelationship } from '../core/soul/relationship'
 import { tick, getPetState, type BehaviorImpulse } from '../core/autonomy/drives'
+import { pathToFileURL } from 'url'
 
 let agent: Agent
 let userIdleMs = 0
@@ -16,6 +17,13 @@ let totalWorkMin = 0
 let lastImpulseWasAt = Date.now()
 
 app.whenReady().then(() => {
+  protocol.handle('local', (request) => {
+    const encoded = request.url.substring('local://'.length)
+    const filePath = decodeURIComponent(encoded)
+    const fileUrl = pathToFileURL(filePath).href
+    return net.fetch(fileUrl)
+  })
+
   getDatabase()
   agent = new Agent()
   const win = createMainWindow()
