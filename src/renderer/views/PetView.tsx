@@ -55,19 +55,19 @@ export function PetView({ modelSource, state, onClick, onContextMenu }: PetViewP
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 2) { onContextMenu(e); return }
     dragging.current = false
-    startPos.current = { x: e.clientX, y: e.clientY }
+    startPos.current = { x: e.screenX, y: e.screenY }
   }, [onContextMenu])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!(e.buttons & 1)) return
-    const dx = e.clientX - startPos.current.x
-    const dy = e.clientY - startPos.current.y
+    const dx = e.screenX - startPos.current.x
+    const dy = e.screenY - startPos.current.y
     if (!dragging.current && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
       dragging.current = true
     }
     if (dragging.current) {
       window.inkAPI.moveWindowBy(dx, dy)
-      startPos.current = { x: e.clientX, y: e.clientY }
+      startPos.current = { x: e.screenX, y: e.screenY }
     }
   }, [])
 
