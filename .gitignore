@@ -7,3 +7,5 @@ out/
 *.db-journal
 .DS_Store
 Thumbs.db
+docs/
+docs/
