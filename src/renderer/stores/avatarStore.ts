@@ -1,9 +1,17 @@
 import { create } from 'zustand'
-import type { Expression } from '../components/Avatar'
+
+export type AvatarExpression =
+  | 'neutral'
+  | 'happy'
+  | 'sad'
+  | 'surprised'
+  | 'curious'
+  | 'tired'
+  | 'love'
 
 interface AvatarState {
-  expression: Expression
-  setExpression: (expr: Expression) => void
+  expression: AvatarExpression
+  setExpression: (expr: AvatarExpression) => void
 }
 
 export const useAvatarStore = create<AvatarState>((set) => ({

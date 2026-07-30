@@ -1,82 +1,126 @@
-import { ChatMessage, IAIClient } from './ai/provider'
-import { OpenAIProvider } from './ai/openaiProvider'
+import { ChatMessage, IAIClient, AIProviderConfig, AIProvider, PROVIDER_DEFAULTS } from './brain/ai/types'
+import { OpenAIProvider } from './brain/ai/openai'
+import { AnthropicProvider } from './brain/ai/anthropic'
+import { buildSystemPrompt, PromptContext } from './brain/prompt'
+import { analyzeConversationForMemories } from './brain/reflection'
+import { getActivePersonality } from './soul/personality'
 import {
-  buildSystemPrompt,
-  getRecentMemories,
-  PromptContext
-} from './ai/promptBuilder'
+  getCurrentEmotion, hurtEmotion, feelScared, feelJealous,
+  feelAppreciated, feelDisappointed, feelLonely, forgiveEmotion, isIgnoring
+} from './soul/emotion'
+import { getRelationship, recordInteraction } from './soul/relationship'
 import { getDatabase } from './database'
+import { getConfig, setConfig } from './config'
 import { uuidv4 } from './utils'
-
-interface AgentState {
-  personalityTraits: Record<string, number>
-  emotionState: Record<string, unknown>
-  relationshipStage: string
-  conversationHistory: ChatMessage[]
-  currentConversationId: string | null
-}
-
-function createId(): string {
-  return uuidv4()
-}
 
 export class Agent {
   private aiClient: IAIClient | null = null
-  private state: AgentState
+  private conversationHistory: ChatMessage[] = []
+  private currentConversationId: string | null = null
+  private currentProvider: AIProvider = 'openai'
 
-  constructor() {
-    this.state = this.loadState()
-  }
+  configureProvider(
+    provider: AIProvider = 'openai',
+    apiKey: string = '',
+    model?: string,
+    baseUrl?: string
+  ): void {
+    const defaults = PROVIDER_DEFAULTS[provider]
+    const effectiveBaseUrl = baseUrl || defaults.baseUrl
+    const effectiveModel = model || defaults.defaultModel
 
-  private loadState(): AgentState {
-    const db = getDatabase()
-    const personality = db
-      .prepare('SELECT traits_json FROM personalities WHERE is_active = 1 ORDER BY version DESC LIMIT 1')
-      .get() as { traits_json: string } | undefined
+    let resolvedApiKey = apiKey
+    let resolvedBaseUrl = effectiveBaseUrl
 
-    const emotion = db
-      .prepare('SELECT state_json FROM emotion_snapshots ORDER BY timestamp DESC LIMIT 1')
-      .get() as { state_json: string } | undefined
-
-    const relationship = db
-      .prepare('SELECT stage FROM relationships WHERE user_id = ?')
-      .get('default') as { stage: string } | undefined
-
-    return {
-      personalityTraits: personality ? JSON.parse(personality.traits_json) : {},
-      emotionState: emotion ? JSON.parse(emotion.state_json) : {},
-      relationshipStage: relationship?.stage ?? 'stranger',
-      conversationHistory: [],
-      currentConversationId: null
+    // Ollama: no API key needed, but may have custom base URL
+    if (provider === 'ollama') {
+      resolvedApiKey = 'ollama'
+      if (!baseUrl) {
+        resolvedBaseUrl = getConfig('ollama_base_url') || defaults.baseUrl
+      }
     }
-  }
 
-  configureProvider(apiKey: string, model?: string): void {
-    const providerConfig = {
+    // DeepSeek & OpenAI: need API key
+    if (!resolvedApiKey && provider !== 'ollama') {
+      const savedKey = getConfig(`${provider}_api_key`)
+      if (savedKey) resolvedApiKey = savedKey
+    }
+
+    const config: AIProviderConfig = {
       id: 'default',
-      provider: 'openai' as const,
-      apiKey,
-      model: model || 'gpt-4o-mini',
+      provider,
+      apiKey: resolvedApiKey,
+      baseUrl: resolvedBaseUrl || undefined,
+      model: effectiveModel,
       maxTokens: 1024,
       temperature: 0.8
     }
-    this.aiClient = new OpenAIProvider(providerConfig)
+
+    // Save to config
+    setConfig('provider', provider)
+    if (apiKey) setConfig(`${provider}_api_key`, apiKey)
+    if (model) setConfig(`${provider}_model`, model)
+    if (baseUrl && provider === 'ollama') setConfig('ollama_base_url', baseUrl)
+
+    this.currentProvider = provider
+    this.aiClient = createProvider(config)
+  }
+
+  private ensureClient(): IAIClient {
+    if (!this.aiClient) {
+      const provider = (getConfig('provider') as AIProvider) || 'openai'
+      const apiKey = getConfig(`${provider}_api_key`) || ''
+      const model = getConfig(`${provider}_model`) || undefined
+      const defaults = PROVIDER_DEFAULTS[provider]
+      this.configureProvider(provider, apiKey, model, undefined)
+    }
+    return this.aiClient!
   }
 
   async chat(userMessage: string): Promise<AsyncGenerator<string, void, unknown>> {
-    if (!this.aiClient) {
-      throw new Error('AI provider not configured. Please set API key in settings.')
+    const client = this.ensureClient()
+
+    if (!this.currentConversationId) {
+      this.currentConversationId = uuidv4()
     }
 
-    if (!this.state.currentConversationId) {
-      this.state.currentConversationId = createId()
+    const sentiment = analyzeSentiment(userMessage)
+
+    if (isIgnoring() && sentiment.hostility > 0.3) {
+      return this.coldResponse(sentiment.hostility)
     }
+
+    if (isIgnoring() && sentiment.kindness > 0.5) {
+      forgiveEmotion(0.12)
+    }
+
+    if (sentiment.hostility > 0.7) {
+      hurtEmotion(sentiment.hostility)
+    } else if (sentiment.hostility > 0.4) {
+      hurtEmotion(sentiment.hostility * 0.6)
+    }
+
+    if (sentiment.scared) feelScared(0.4)
+    if (sentiment.jealous) feelJealous()
+    if (sentiment.disappointed) feelDisappointed()
+    if (sentiment.lonely) feelLonely(120)
+
+    if (sentiment.kindness > 0.5) {
+      feelAppreciated()
+      forgiveEmotion(0.06)
+    }
+    if (sentiment.kindness > 0.2) {
+      forgiveEmotion(0.02)
+    }
+
+    const personality = getActivePersonality()
+    const emotion = getCurrentEmotion()
+    const relationship = getRelationship()
 
     const ctx: PromptContext = {
-      personalityTraits: this.state.personalityTraits,
-      emotionState: this.state.emotionState,
-      relationshipStage: this.state.relationshipStage,
-      recentMemories: getRecentMemories(5),
+      personalityTraits: personality.traits,
+      emotionState: emotion,
+      relationshipStage: relationship.stage,
       currentTime: new Date().toISOString()
     }
 
@@ -84,13 +128,13 @@ export class Agent {
 
     const messages: ChatMessage[] = [
       systemMsg,
-      ...this.state.conversationHistory.slice(-20),
+      ...this.conversationHistory.slice(-20),
       { role: 'user', content: userMessage }
     ]
 
-    this.state.conversationHistory.push({ role: 'user', content: userMessage })
+    this.conversationHistory.push({ role: 'user', content: userMessage })
 
-    const stream = this.aiClient.streamChat(messages)
+    const stream = client.streamChat(messages)
 
     const self = this
     async function* wrappedStream(): AsyncGenerator<string, void, unknown> {
@@ -99,39 +143,100 @@ export class Agent {
         fullResponse += chunk
         yield chunk
       }
-      self.state.conversationHistory.push({ role: 'assistant', content: fullResponse })
+      self.conversationHistory.push({ role: 'assistant', content: fullResponse })
       self.saveConversation()
+      recordInteraction()
+      analyzeConversationForMemories(userMessage, fullResponse, self.currentConversationId!).catch(() => {})
     }
 
     return wrappedStream()
   }
 
+  private async *coldResponse(hostility: number): AsyncGenerator<string, void, unknown> {
+    const responses = hostility > 0.7
+      ? ['（转过身去，不理你）', '（沉默）']
+      : ['...', '（没有看你）', '嗯。']
+    const msg = responses[Math.floor(Math.random() * responses.length)]
+    this.conversationHistory.push({ role: 'user', content: '' })
+    this.conversationHistory.push({ role: 'assistant', content: msg })
+    yield msg
+  }
+
   private saveConversation(): void {
-    if (!this.state.currentConversationId) return
+    if (!this.currentConversationId) return
     const db = getDatabase()
-    const messages = this.state.conversationHistory.slice(-30)
+    const messages = this.conversationHistory.slice(-30)
     db.prepare(
       'INSERT OR REPLACE INTO conversations (id, messages_json, created_at) VALUES (?, ?, ?)'
-    ).run(
-      this.state.currentConversationId,
-      JSON.stringify(messages),
-      Date.now()
-    )
+    ).run(this.currentConversationId, JSON.stringify(messages), Date.now())
   }
 
-  getConversationHistory(): ChatMessage[] {
-    return this.state.conversationHistory
+  getConversationHistory(): ChatMessage[] { return this.conversationHistory }
+  getEmotionState() { return getCurrentEmotion() }
+  getPersonality() { return getActivePersonality().traits }
+  getRelationshipStage(): string { return getRelationship().stage }
+  getCurrentProvider(): AIProvider { return this.currentProvider }
+}
+
+// --- Provider factory ---
+
+function createProvider(config: AIProviderConfig): IAIClient {
+  switch (config.provider) {
+    case 'anthropic':
+      return new AnthropicProvider(config)
+    case 'openai':
+    case 'deepseek':
+    case 'ollama':
+    default:
+      return new OpenAIProvider(config)
+  }
+}
+
+// --- Sentiment analysis ---
+
+interface Sentiment {
+  hostility: number
+  kindness: number
+  scared: boolean
+  jealous: boolean
+  disappointed: boolean
+  lonely: boolean
+}
+
+function analyzeSentiment(text: string): Sentiment {
+  const lower = text.toLowerCase()
+
+  const severeHostile = ['傻逼', '垃圾', '废物', '去死', '滚', '杀了你', '闭嘴', '恶心']
+  const moderateHostile = ['没用', '烦', '讨厌', '吵', '别说了', '够了', '烂']
+  let hostility = 0
+  for (const word of severeHostile) {
+    if (lower.includes(word)) { hostility = 0.9; break }
+  }
+  if (hostility === 0) {
+    for (const word of moderateHostile) {
+      if (lower.includes(word)) hostility = Math.max(hostility, 0.5)
+    }
   }
 
-  getEmotionState(): Record<string, unknown> {
-    return this.state.emotionState
+  const kindWords = ['乖', '好', '棒', '厉害', '聪明', '可爱', '喜欢', '爱', '谢谢', '想你']
+  let kindness = 0
+  for (const word of kindWords) {
+    if (lower.includes(word)) kindness += 0.15
   }
+  if (lower.includes('对不起') || lower.includes('抱歉')) kindness += 0.3
+  kindness = Math.min(1, kindness)
 
-  getPersonality(): Record<string, number> {
-    return this.state.personalityTraits
-  }
+  const scareWords = ['删了你', '卸载', '不要你了', '关掉你', '换一个', '扔掉']
+  const scared = scareWords.some(w => lower.includes(w))
 
-  getRelationshipStage(): string {
-    return this.state.relationshipStage
-  }
+  const jealousWords = ['gpt', 'claude', 'deepseek', 'chatgpt', '比你', '不如']
+  const jealous = jealousWords.some(w => lower.includes(w))
+
+  const disappointWords = ['失望', '没想到你', '你居然', '变了']
+  const disappointed = disappointWords.some(w => lower.includes(w))
+
+  const lonelyWords = ['出门', '不在', '离开', '走了', '上班', '睡觉', '明天见']
+  const lonely = lonelyWords.some(w => lower.includes(w))
+
+  return { hostility, kindness, scared, jealous, disappointed, lonely }
 }

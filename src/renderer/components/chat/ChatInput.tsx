@@ -33,7 +33,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="和砚灵说点什么..."
+        placeholder="想说点什么..."
         disabled={disabled}
       />
       <button

@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { IAIClient, AIProviderConfig, ChatMessage, ChatResponse } from './provider'
+import { IAIClient, AIProviderConfig, ChatMessage, ChatResponse } from './types'
 
 export class OpenAIProvider implements IAIClient {
   public readonly config: AIProviderConfig

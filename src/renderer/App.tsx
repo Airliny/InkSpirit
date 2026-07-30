@@ -1,183 +1,144 @@
-import { useState, useEffect } from 'react'
-import { Avatar } from './components/Avatar'
-import { ChatBubble } from './components/ChatBubble'
-import { ChatInput } from './components/ChatInput'
+import { useState, useEffect, useCallback } from 'react'
 import { useChatStore } from './stores/chatStore'
 import { useAvatarStore } from './stores/avatarStore'
+import { ChatView } from './views/ChatView'
+import { SettingsView } from './views/SettingsView'
+import { WizardView } from './views/WizardView'
+import { PetView } from './views/PetView'
+import { useIdleBehavior } from './hooks/useIdleBehavior'
+import type { SpriteSource, ModelSource } from './components/avatar/modelTypes'
 import './App.css'
 
-declare global {
-  interface Window {
-    inkAPI: import('../preload/index').InkAPI
-  }
-}
-
-type View = 'avatar' | 'chat' | 'settings'
+type Screen = 'wizard' | 'desktop'
+type Panel = 'chat' | 'settings' | null
 
 export default function App() {
-  const [view, setView] = useState<View>('avatar')
+  const [screen, setScreen] = useState<Screen>('desktop')
+  const [loading, setLoading] = useState(true)
+  const [mode, setMode] = useState<'pet' | 'panel'>('pet')
+  const [panel, setPanel] = useState<Panel>(null)
+  const [modelSource, setModelSource] = useState<ModelSource>({ type: 'sprites', sprites: {} })
   const {
-    messages,
-    isStreaming,
-    addUserMessage,
-    appendAssistantChunk,
-    finishAssistantMessage,
-    clearChat
+    messages, isStreaming, addUserMessage, appendAssistantChunk, finishAssistantMessage
   } = useChatStore()
   const { expression, setExpression } = useAvatarStore()
+  const idleState = useIdleBehavior()
+
+  // Init
+  useEffect(() => {
+    async function init() {
+      try {
+        const hasModel = await window.inkAPI.hasModel()
+        if (!hasModel) {
+          const firstLaunch = await window.inkAPI.getConfig('first_launch')
+          if (firstLaunch !== 'false') {
+            await window.inkAPI.setPanelMode()
+            setMode('panel'); setScreen('wizard'); setLoading(false); return
+          }
+        }
+
+        const modelType = await window.inkAPI.getModelType()
+        if (modelType === 'live2d') {
+          const l2dPath = await window.inkAPI.getLive2DPath()
+          if (l2dPath) {
+            setModelSource({ type: 'live2d', live2d: { type: 'live2d', modelPath: l2dPath } })
+          }
+        } else {
+          const savedSprites = await window.inkAPI.getModelSprites()
+          const source: SpriteSource = {}
+          for (const [key, val] of Object.entries(savedSprites)) {
+            if (val) (source as any)[key] = val
+          }
+          setModelSource({ type: 'sprites', sprites: source })
+        }
+      } catch {}
+      setLoading(false)
+    }
+    init()
+  }, [])
 
   useEffect(() => {
-    const unsubChunk = window.inkAPI.onChatChunk((chunk) => {
-      appendAssistantChunk(chunk)
+    const unsub = window.inkAPI.onWindowMode((newMode) => {
+      setMode(newMode)
+      if (newMode === 'pet') setPanel(null)
     })
-    const unsubDone = window.inkAPI.onChatDone(() => {
-      finishAssistantMessage()
-      setExpression('neutral')
-    })
+    return unsub
+  }, [])
 
-    return () => {
-      unsubChunk()
-      unsubDone()
+  useEffect(() => {
+    const u1 = window.inkAPI.onChatChunk((chunk) => appendAssistantChunk(chunk))
+    const u2 = window.inkAPI.onChatDone(() => { finishAssistantMessage(); setExpression('neutral') })
+    return () => { u1(); u2() }
+  }, [])
+
+  const handlePetClick = useCallback(() => { window.inkAPI.setPanelMode(); setPanel('chat') }, [])
+  const handlePetContextMenu = useCallback((e: React.MouseEvent) => { e.preventDefault(); window.inkAPI.setPanelMode(); setPanel('chat') }, [])
+  const handleBackToPet = useCallback(() => { window.inkAPI.setPetMode() }, [])
+
+  const handleSend = useCallback(async (message: string) => {
+    addUserMessage(message); setExpression('happy')
+    try { await window.inkAPI.chat(message) } catch {
+      appendAssistantChunk('\u62b1\u6b49\uff0c\u6211\u6682\u65f6\u65e0\u6cd5\u56de\u5e94...')
+      finishAssistantMessage(); setExpression('sad')
     }
   }, [])
 
-  async function handleSend(message: string) {
-    addUserMessage(message)
-    setView('chat')
-    setExpression('happy')
-    try {
-      await window.inkAPI.chat(message)
-    } catch (e) {
-      appendAssistantChunk('抱歉，我暂时无法回应...请检查 API 设置。')
-      finishAssistantMessage()
-      setExpression('sad')
+  const handleWizardComplete = useCallback(async () => {
+    const modelType = await window.inkAPI.getModelType()
+    if (modelType === 'live2d') {
+      const l2dPath = await window.inkAPI.getLive2DPath()
+      if (l2dPath) setModelSource({ type: 'live2d', live2d: { type: 'live2d', modelPath: l2dPath } })
+    } else {
+      const savedSprites = await window.inkAPI.getModelSprites()
+      const source: SpriteSource = {}
+      for (const [key, val] of Object.entries(savedSprites)) {
+        if (val) (source as any)[key] = val
+      }
+      setModelSource({ type: 'sprites', sprites: source })
     }
+    setScreen('desktop'); window.inkAPI.setPetMode()
+  }, [])
+
+  if (loading) return <div className="app-container" />
+
+  if (screen === 'wizard') {
+    return (
+      <div className="app-container">
+        <WizardView onComplete={handleWizardComplete} />
+      </div>
+    )
   }
 
-  function handleAvatarClick() {
-    if (view === 'avatar') {
-      setView('chat')
-    } else if (view === 'chat') {
-      setView('avatar')
-    }
+  if (mode === 'pet') {
+    return (
+      <div className="pet-mode-root">
+        <PetView modelSource={modelSource} state={idleState} onClick={handlePetClick} onContextMenu={handlePetContextMenu} />
+      </div>
+    )
   }
+
+  const exprToState: Record<string, string> = { neutral: 'idle', happy: 'happy', sad: 'sad', surprised: 'surprised', love: 'love' }
+  const panelState = panel === 'chat' ? (exprToState[expression] ?? 'idle') : idleState
 
   return (
     <div className="app-container">
-      {/* Title bar */}
       <div className="title-bar">
-        <span className="title-text">砚灵 InkSpirit</span>
+        <span className="title-text">InkSpirit</span>
         <div className="title-actions">
-          <button
-            className="title-btn"
-            onClick={() => setView(view === 'settings' ? 'avatar' : 'settings')}
-            title="设置"
-          >
-            ⚙
+          <button className="title-btn" onClick={() => setPanel(panel === 'settings' ? 'chat' : 'settings')}>
+            {panel === 'settings' ? '\u2709' : '\u2699'}
           </button>
-          <button
-            className="title-btn"
-            onClick={() => window.inkAPI.minimizeWindow()}
-            title="最小化"
-          >
-            ─
-          </button>
+          <button className="title-btn" onClick={handleBackToPet}>&#8722;</button>
         </div>
       </div>
-
-      {/* Main content */}
       <div className="main-content">
-        {view === 'avatar' && (
-          <div className="avatar-view" onClick={handleAvatarClick}>
-            <Avatar expression={expression} />
-            <p className="avatar-hint">点击与我对话</p>
-          </div>
+        {panel === 'chat' && (
+          <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} onSend={handleSend} onHeaderClick={handleBackToPet} />
         )}
-
-        {view === 'chat' && (
-          <div className="chat-view">
-            <div className="chat-header" onClick={handleAvatarClick}>
-              <div className="chat-avatar-mini">
-                <Avatar expression={expression} size="small" />
-              </div>
-              <span className="chat-header-name">砚灵</span>
-            </div>
-            <div className="chat-messages">
-              {messages.length === 0 && (
-                <div className="chat-welcome">
-                  <p>你好，我是砚灵。你的 AI 桌面伙伴。</p>
-                  <p>今天过得怎么样？</p>
-                </div>
-              )}
-              {messages.map((msg, i) => (
-                <ChatBubble
-                  key={i}
-                  role={msg.role}
-                  content={msg.content}
-                  isStreaming={isStreaming && i === messages.length - 1 && msg.role === 'assistant'}
-                />
-              ))}
-            </div>
-            <ChatInput onSend={handleSend} disabled={isStreaming} />
-          </div>
-        )}
-
-        {view === 'settings' && (
-          <div className="settings-view">
-            <h3>设置</h3>
-            <SettingsPanel onBack={() => setView('avatar')} />
-          </div>
+        {panel === 'settings' && (
+          <SettingsView modelSource={modelSource} onModelSourceChange={setModelSource} onBack={() => setPanel('chat')} />
         )}
       </div>
-    </div>
-  )
-}
-
-function SettingsPanel({ onBack }: { onBack: () => void }) {
-  const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('gpt-4o-mini')
-  const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    window.inkAPI.getConfig('openai_api_key').then((key) => {
-      if (key) setApiKey(key)
-    })
-    window.inkAPI.getConfig('openai_model').then((m) => {
-      if (m) setModel(m)
-    })
-  }, [])
-
-  async function handleSave() {
-    await window.inkAPI.configureProvider(apiKey, model)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  return (
-    <div className="settings-form">
-      <label>
-        OpenAI API Key
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="sk-..."
-        />
-      </label>
-      <label>
-        Model
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
-          <option value="gpt-4o-mini">GPT-4o Mini</option>
-          <option value="gpt-4o">GPT-4o</option>
-          <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-        </select>
-      </label>
-      <button className="settings-save-btn" onClick={handleSave}>
-        {saved ? '已保存' : '保存设置'}
-      </button>
-      <button className="settings-back-btn" onClick={onBack}>
-        返回
-      </button>
     </div>
   )
 }

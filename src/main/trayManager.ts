@@ -10,7 +10,7 @@ export function createTray(mainWindow: BrowserWindow): void {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '显示/隐藏砚灵',
+      label: '显示/隐藏伙伴',
       click: () => {
         toggleVisibility()
       }
@@ -38,14 +38,14 @@ export function createTray(mainWindow: BrowserWindow): void {
     },
     { type: 'separator' },
     {
-      label: '退出砚灵',
+      label: '退出 InkSpirit',
       click: () => {
         app.quit()
       }
     }
   ])
 
-  tray.setToolTip('砚灵 InkSpirit')
+  tray.setToolTip('InkSpirit')
   tray.setContextMenu(contextMenu)
 
   tray.on('click', () => {
