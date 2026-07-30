@@ -59,6 +59,13 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
 
       <div className="settings-section">
         <h4>伙伴形象</h4>
+        {modelSource.type === 'live2d' && (
+          <div style={{ marginBottom: 8 }}>
+            <button className="settings-sprite-btn" onClick={() => onModelSourceChange({ type: 'sprites', sprites: {} })} style={{ color: '#fbbf24' }}>
+              切换为精灵图模式
+            </button>
+          </div>
+        )}
         <div style={{ marginBottom: 12 }}>
           <button className="settings-sprite-btn" onClick={handleImportLive2D} disabled={importing} style={{ width: '100%', padding: '12px' }}>
             {importing ? '导入中...' : (modelSource.type === 'live2d' ? 'Live2D 模型已加载 — 点击重新导入' : '导入 Live2D 模型 (.model3.json)')}

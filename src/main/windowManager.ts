@@ -12,6 +12,7 @@ export function createMainWindow(): BrowserWindow {
     height: 200,
     x: width - 200,
     y: height - 280,
+    title: 'InkSpirit',
     frame: false,
     transparent: true,
     alwaysOnTop: true,

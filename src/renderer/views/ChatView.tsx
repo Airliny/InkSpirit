@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Avatar } from '../components/avatar/Avatar'
 import { Live2DView } from '../components/avatar/Live2DView'
 import { ChatBubble } from '../components/chat/ChatBubble'
@@ -14,6 +15,13 @@ interface ChatViewProps {
 }
 
 export function ChatView({ modelSource, state, messages, isStreaming, onSend, onHeaderClick }: ChatViewProps) {
+  const bubblesRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = bubblesRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages])
+
   return (
     <div className="chat-panel">
       <div className="chat-pet-avatar" onClick={onHeaderClick}>
@@ -23,7 +31,7 @@ export function ChatView({ modelSource, state, messages, isStreaming, onSend, on
           <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={state} size={72} />
         )}
       </div>
-      <div className="chat-bubbles">
+      <div className="chat-bubbles" ref={bubblesRef}>
         {messages.length === 0 && (
           <div className="chat-empty">
             <div className="chat-empty-bubble">你好，我是你的桌面伙伴。</div>
