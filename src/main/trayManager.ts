@@ -30,6 +30,8 @@ export function createTray(mainWindow: BrowserWindow): void {
         const win = getMainWindow()
         if (win) { win.show(); win.focus() }
         setPanelMode()
+        const w = getMainWindow()
+        if (w) w.webContents.send('navigate', 'chat')
       }
     },
     {

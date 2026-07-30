@@ -70,6 +70,7 @@ export default function App() {
     const u2 = window.inkAPI.onChatDone(() => { finishAssistantMessage(); setExpression('neutral') })
     const u3 = window.inkAPI.onNavigate((page: string) => {
       if (page === 'settings') { setScreen('desktop'); setMode('panel'); setPanel('settings') }
+      if (page === 'chat') { setScreen('desktop'); setMode('panel'); setPanel('chat') }
     })
     return () => { u1(); u2(); u3() }
   }, [])
