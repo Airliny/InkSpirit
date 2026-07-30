@@ -1,0 +1,28 @@
+appId: com.inkspirit.app
+productName: InkSpirit
+copyright: Copyright © 2025 InkSpirit
+
+directories:
+  buildResources: resources
+  output: dist
+
+files:
+  - out/**/*
+  - "!node_modules/**/*"
+
+extraResources:
+  - from: resources/avatar
+    to: avatar
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: resources/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: InkSpirit
