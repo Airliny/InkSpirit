@@ -4,6 +4,7 @@ import { setConfig, getConfig } from '../../core/config'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { pathToFileURL } from 'url'
 import { getMainWindow } from '../windowManager'
 
 export function registerDataHandlers(): void {
@@ -62,7 +63,7 @@ export function registerDataHandlers(): void {
     const destPath = path.join(avatarsDir, destName)
     fs.copyFileSync(srcPath, destPath)
 
-    const fileUrl = `file://${destPath}`
+    const fileUrl = destPath.startsWith('file://') ? destPath : pathToFileURL(destPath).href
     setConfig(`sprite_${spriteKey}`, fileUrl)
 
     return { success: true, path: fileUrl }
@@ -84,7 +85,7 @@ export function registerDataHandlers(): void {
     const destPath = path.join(avatarsDir, destName)
     fs.copyFileSync(srcPath, destPath)
 
-    const fileUrl = `file://${destPath}`
+    const fileUrl = destPath.startsWith('file://') ? destPath : pathToFileURL(destPath).href
     setConfig(`sprite_${spriteKey}`, fileUrl)
 
     return { success: true, path: fileUrl }

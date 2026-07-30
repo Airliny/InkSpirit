@@ -10,6 +10,7 @@ files:
   - out/**/*
   - node_modules/**/*
   - package.json
+  - resources/**/*
 
 asarUnpack:
   - node_modules/better-sqlite3/**/*

@@ -68,7 +68,10 @@ export default function App() {
   useEffect(() => {
     const u1 = window.inkAPI.onChatChunk((chunk) => appendAssistantChunk(chunk))
     const u2 = window.inkAPI.onChatDone(() => { finishAssistantMessage(); setExpression('neutral') })
-    return () => { u1(); u2() }
+    const u3 = window.inkAPI.onNavigate((page: string) => {
+      if (page === 'settings') { setScreen('desktop'); setMode('panel'); setPanel('settings') }
+    })
+    return () => { u1(); u2(); u3() }
   }, [])
 
   const handlePetClick = useCallback(() => { window.inkAPI.setPanelMode(); setPanel('chat') }, [])

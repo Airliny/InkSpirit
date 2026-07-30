@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { AnimationState } from './modelTypes'
 import { resolveSpriteUrl } from './modelTypes'
 import type { SpriteSource } from './modelTypes'
@@ -11,19 +11,10 @@ interface AvatarProps {
 }
 
 export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarProps) {
-  const [currentSprite, setCurrentSprite] = useState<string | null>(null)
-  const imgRef = useRef<HTMLImageElement>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
 
-  useEffect(() => {
-    const url = resolveSpriteUrl({ type: 'sprites', sprites }, state)
-    if (url) {
-      const img = new Image()
-      img.onload = () => setCurrentSprite(url)
-      img.src = url.replace('file://', '')
-    } else {
-      setCurrentSprite(null)
-    }
-  }, [state, sprites])
+  const url = resolveSpriteUrl({ type: 'sprites', sprites }, state)
 
   return (
     <div
@@ -39,21 +30,24 @@ export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarP
         userSelect: 'none'
       }}
     >
-      {currentSprite ? (
+      {url && !failed ? (
         <img
-          ref={imgRef}
-          src={currentSprite.replace('file://', '')}
+          src={url}
           alt="pet"
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
           style={{
             maxWidth: '100%',
             maxHeight: '100%',
             objectFit: 'contain',
             pointerEvents: 'none',
-            imageRendering: 'pixelated'
+            imageRendering: 'pixelated',
+            display: loaded ? 'block' : 'none'
           }}
           draggable={false}
         />
-      ) : (
+      ) : null}
+      {(!url || failed) && (
         <div style={{
           width: size * 0.6,
           height: size * 0.6,

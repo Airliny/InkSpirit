@@ -51,7 +51,7 @@ export function setPetMode(): void {
   mainWindow.setSize(180, 200)
   mainWindow.setResizable(false)
   mainWindow.setHasShadow(false)
-  mainWindow.setIgnoreMouseEvents(true, { forward: true })
+  mainWindow.setIgnoreMouseEvents(false)
   mainWindow.webContents.send('window:mode', 'pet')
 }
 
