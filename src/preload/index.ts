@@ -5,6 +5,7 @@ const api = {
   configureProvider: (provider: string, apiKey?: string, model?: string, baseUrl?: string) =>
     ipcRenderer.invoke('agent:configureProvider', provider, apiKey, model, baseUrl),
   getAgentState: () => ipcRenderer.invoke('agent:getState'),
+  getModelInfo: () => ipcRenderer.invoke('agent:getModelInfo'),
   getConfig: (key: string) => ipcRenderer.invoke('config:get', key),
   setConfig: (key: string, value: string) => ipcRenderer.invoke('config:set', key, value),
   getSecureConfig: (key: string) => ipcRenderer.invoke('config:getSecure', key),
@@ -38,6 +39,8 @@ const api = {
   importData: () => ipcRenderer.invoke('data:import'),
 
   // Chat events
+  getChatHistory: () => ipcRenderer.invoke('chat:getHistory'),
+  clearChatHistory: () => ipcRenderer.invoke('chat:clear'),
   onChatChunk: (cb: (chunk: string) => void) => {
     const h = (_e: Electron.IpcRendererEvent, c: string) => cb(c)
     ipcRenderer.on('agent:chat-chunk', h)

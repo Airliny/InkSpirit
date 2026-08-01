@@ -10,17 +10,23 @@ interface ChatViewProps {
   state: AnimationState
   messages: { role: 'user' | 'assistant'; content: string }[]
   isStreaming: boolean
+  modelInfo: { provider: string; model: string; localModel: string | null }
+  lastRoute: 'local' | 'cloud' | null
   onSend: (message: string) => void
   onHeaderClick: () => void
 }
 
-export function ChatView({ modelSource, state, messages, isStreaming, onSend, onHeaderClick }: ChatViewProps) {
+export function ChatView({ modelSource, state, messages, isStreaming, modelInfo, lastRoute, onSend, onHeaderClick }: ChatViewProps) {
   const bubblesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const el = bubblesRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
+
+  const modelLabel = lastRoute === 'local' && modelInfo.localModel
+    ? `本地 · ${modelInfo.localModel}`
+    : `${modelInfo.provider} · ${modelInfo.model || '未配置'}`
 
   return (
     <div className="chat-panel">
@@ -43,6 +49,16 @@ export function ChatView({ modelSource, state, messages, isStreaming, onSend, on
         ))}
       </div>
       <ChatInput onSend={onSend} disabled={isStreaming} />
+      <div style={{
+        padding: '4px 14px 8px',
+        fontSize: 10,
+        color: 'var(--ink-faint)',
+        textAlign: 'center',
+        userSelect: 'none',
+        letterSpacing: 0.5
+      }}>
+        {modelLabel}
+      </div>
     </div>
   )
 }

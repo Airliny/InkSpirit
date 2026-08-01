@@ -11,6 +11,7 @@ interface ChatState {
   addUserMessage: (content: string) => void
   appendAssistantChunk: (chunk: string) => void
   finishAssistantMessage: () => void
+  setMessages: (messages: ChatMessage[]) => void
   clearChat: () => void
 }
 
@@ -38,6 +39,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   finishAssistantMessage: () =>
     set({ isStreaming: false }),
+
+  setMessages: (messages) =>
+    set({ messages, isStreaming: false }),
 
   clearChat: () =>
     set({ messages: [], isStreaming: false })

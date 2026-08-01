@@ -34,24 +34,31 @@ export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarP
             maxWidth: '100%',
             maxHeight: '100%',
             objectFit: 'contain',
-            pointerEvents: 'none',
-            imageRendering: 'pixelated'
+            pointerEvents: 'none'
           }}
           draggable={false}
         />
       ) : (
-        <div style={{
-          width: size * 0.6,
-          height: size * 0.6,
-          borderRadius: '50%',
-          background: 'rgba(100,100,200,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: size * 0.15,
-          color: 'rgba(255,255,255,0.3)'
-        }}>
-          ?
+        <div
+          style={{
+            width: size * 0.55,
+            height: size * 0.55,
+            borderRadius: '50%',
+            background: 'var(--ink)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 10px rgba(43,42,38,0.2)'
+          }}
+        >
+          <span style={{
+            fontFamily: 'var(--font-serif)',
+            fontSize: size * 0.22,
+            color: 'var(--paper)',
+            opacity: 0.85
+          }}>
+            砚
+          </span>
         </div>
       )}
     </div>

@@ -47,14 +47,12 @@ export function WizardView({ onComplete }: WizardViewProps) {
     setStep('done')
   }, [apiKey])
 
-  const canProceed = idleSprite || live2dPath
-
   return (
     <div className="wizard-container">
       {step === 'welcome' && (
         <div className="wizard-step">
-          <div className="wizard-icon">&#x1f9d9;</div>
-          <h2>欢迎来到 InkSpirit</h2>
+          <div className="wizard-icon wizard-seal">砚</div>
+          <h2>欢迎来到砚灵</h2>
           <p className="wizard-desc">创造属于你的专属桌面伙伴</p>
           <div className="wizard-actions">
             <button className="wizard-btn primary" onClick={() => setStep('choose_type')}>开始</button>
@@ -64,16 +62,20 @@ export function WizardView({ onComplete }: WizardViewProps) {
 
       {step === 'choose_type' && (
         <div className="wizard-step">
-          <h2>选择模型类型</h2>
-          <p className="wizard-desc">你想用哪种方式展现伙伴？</p>
+          <h2>选择形象类型</h2>
+          <p className="wizard-desc">两种模式能力不同，请按需选择</p>
+          <div style={{ width: '100%', fontSize: 11.5, color: 'var(--ink-faint)', lineHeight: 1.7, marginBottom: 6, textAlign: 'left' }}>
+            <div style={{ color: 'var(--cinnabar)', fontWeight: 600 }}>Live2D：单模型导入，自带呼吸/眨眼动画；情绪切换动作取决于模型是否带对应动作。</div>
+            <div style={{ color: 'var(--moss)', fontWeight: 600, marginTop: 4 }}>精灵图：可逐动作导入 10 张图（默认/行走/睡觉/坐着/伸懒腰/打哈欠/惊讶/开心/难过/喜欢），未导入的动作自动用默认图。</div>
+          </div>
           <div className="wizard-actions" style={{ flexDirection: 'column', gap: 12 }}>
-            <button className="wizard-btn" style={{ padding: '24px', width: '100%' }} onClick={() => setStep('import_live2d')}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>&#x1f3ac;</div>
+            <button className="wizard-btn" style={{ padding: '22px', width: '100%' }} onClick={() => setStep('import_live2d')}>
+              <div style={{ fontSize: 26, marginBottom: 8, fontFamily: 'var(--font-serif)', letterSpacing: 2 }}>L2D</div>
               <div style={{ fontSize: 15, fontWeight: 600 }}>Live2D 模型</div>
               <p className="wizard-sub" style={{ marginBottom: 0, marginTop: 4 }}>导入 .model3.json 模型文件夹</p>
             </button>
-            <button className="wizard-btn" style={{ padding: '24px', width: '100%' }} onClick={() => setStep('import_sprites')}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>&#x1f5bc;</div>
+            <button className="wizard-btn" style={{ padding: '22px', width: '100%' }} onClick={() => setStep('import_sprites')}>
+              <div style={{ fontSize: 26, marginBottom: 8, fontFamily: 'var(--font-serif)', letterSpacing: 2 }}>图</div>
               <div style={{ fontSize: 15, fontWeight: 600 }}>精灵图</div>
               <p className="wizard-sub" style={{ marginBottom: 0, marginTop: 4 }}>导入 PNG / GIF 图片作为形象</p>
             </button>
@@ -137,7 +139,7 @@ export function WizardView({ onComplete }: WizardViewProps) {
 
       {step === 'done' && (
         <div className="wizard-step">
-          <div className="wizard-icon">&#x2728;</div>
+          <div className="wizard-icon wizard-seal">成</div>
           <h2>伙伴已就绪</h2>
           <p className="wizard-desc">它会一直在桌面上陪伴你</p>
           <button className="wizard-btn primary" onClick={onComplete}>进入桌面</button>

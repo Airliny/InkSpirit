@@ -25,7 +25,8 @@ interface PetViewProps {
   onContextMenu: (e: React.MouseEvent) => void
 }
 
-export function PetView({ modelSource, expression, mood, onClick, onContextMenu }: PetViewProps) {  const [bubbles, setBubbles] = useState<Bubble[]>([])
+export function PetView({ modelSource, expression, mood, onClick, onContextMenu }: PetViewProps) {
+  const [bubbles, setBubbles] = useState<Bubble[]>([])
   const [currentState, setCurrentState] = useState<AnimationState>('idle')
   const [override, setOverride] = useState<AnimationState | null>(null)
   const walkRef = useRef<ReturnType<typeof setInterval> | null>(null)

@@ -11,6 +11,9 @@ declare global {
         relationshipStage: string
         history: { role: string; content: string }[]
       }>
+      getModelInfo: () => Promise<{ provider: string; model: string; localModel: string | null }>
+      getChatHistory: () => Promise<{ role: string; content: string }[]>
+      clearChatHistory: () => Promise<{ success: boolean }>
       getConfig: (key: string) => Promise<string | null>
       setConfig: (key: string, value: string) => Promise<boolean>
       getSecureConfig: (key: string) => Promise<string | null>

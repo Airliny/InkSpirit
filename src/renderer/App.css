@@ -642,6 +642,23 @@ html, body, #root {
   line-height: 1;
 }
 
+/* 朱砂印章 */
+.wizard-seal {
+  width: 74px;
+  height: 74px;
+  border-radius: 10px;
+  background: var(--cinnabar);
+  color: var(--paper);
+  font-family: var(--font-serif);
+  font-size: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 12px var(--cinnabar-soft);
+  letter-spacing: 2px;
+  text-indent: 2px;
+}
+
 .wizard-step h2 {
   font-family: var(--font-serif);
   font-size: 23px;
@@ -730,7 +747,6 @@ html, body, #root {
   max-height: 90%;
   object-fit: contain;
   pointer-events: none;
-  image-rendering: pixelated;
 }
 
 .wizard-actions {

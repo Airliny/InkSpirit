@@ -5,6 +5,7 @@ import { decideRoute, getRouterSettings } from '../../core/cost/router'
 import { getUsageSummary, getMonthlyBudget } from '../../core/cost/usage'
 import { cacheKey, getCachedReply, setCachedReply } from '../../core/cost/cache'
 import { getCurrentEmotion, emotionToExpression } from '../../core/soul/emotion'
+import { getDatabase } from '../../core/database'
 
 export function registerChatHandlers(agent: Agent): void {
   ipcMain.handle('agent:chat', async (_event, message: string) => {
@@ -73,6 +74,39 @@ export function registerChatHandlers(agent: Agent): void {
       personality: agent.getPersonality(),
       relationshipStage: agent.getRelationshipStage(),
       history: agent.getConversationHistory()
+    }
+  })
+
+  ipcMain.handle('agent:getModelInfo', () => {
+    const active = agent.getActiveClientInfo()
+    const local = agent.getLocalClientInfo()
+    return { provider: active.provider, model: active.model, localModel: local?.model ?? null }
+  })
+
+  // Restore the most recent conversation from the database
+  ipcMain.handle('chat:getHistory', () => {
+    try {
+      const db = getDatabase()
+      const row = db.prepare(
+        'SELECT messages_json FROM conversations ORDER BY created_at DESC LIMIT 1'
+      ).get() as { messages_json: string } | undefined
+      if (!row) return []
+      const messages = JSON.parse(row.messages_json) as { role: string; content: string }[]
+      return messages.filter(m => m.role === 'user' || m.role === 'assistant').slice(-30)
+    } catch {
+      return []
+    }
+  })
+
+  // Clear conversation history (memory and DB)
+  ipcMain.handle('chat:clear', () => {
+    try {
+      const db = getDatabase()
+      db.prepare('DELETE FROM conversations').run()
+      db.prepare('DELETE FROM memories WHERE source_conversation_id IS NOT NULL').run()
+      return { success: true }
+    } catch {
+      return { success: false }
     }
   })
 

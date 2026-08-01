@@ -195,6 +195,29 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
 
       <div className="settings-section">
         <h4>伙伴形象</h4>
+        <div style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.8, marginBottom: 12, background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>两种形象模式的能力差异</div>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: 'var(--cinnabar)', fontWeight: 600, marginBottom: 2 }}>Live2D 模型</div>
+              <div style={{ color: 'var(--ink-faint)' }}>
+                只需一个模型文件<br />
+                自带呼吸/眨眼等动画<br />
+                情绪切换动作需模型自带对应动作<br />
+                部分模型可能不响应情绪切换
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: 'var(--moss)', fontWeight: 600, marginBottom: 2 }}>精灵图</div>
+              <div style={{ color: 'var(--ink-faint)' }}>
+                可逐动作导入 10 张图<br />
+                未导入的动作自动用默认图<br />
+                情绪/行为会切换对应图片<br />
+                需要准备多张动作图
+              </div>
+            </div>
+          </div>
+        </div>
         {modelSource.type === 'live2d' && (
           <div style={{ marginBottom: 8 }}>
             <button
@@ -395,6 +418,18 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
         <div className="settings-form" style={{ flexDirection: 'row', gap: 8 }}>
           <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleExport}>备份数据</button>
           <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleImport}>恢复数据</button>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <button
+            className="settings-sprite-btn"
+            style={{ color: 'var(--cinnabar)' }}
+            onClick={async () => {
+              await window.inkAPI.clearChatHistory()
+              window.location.reload()
+            }}
+          >
+            清空聊天记录
+          </button>
         </div>
         {dataMsg && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>{dataMsg}</div>}
       </div>

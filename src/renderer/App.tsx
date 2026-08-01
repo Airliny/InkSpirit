@@ -19,10 +19,12 @@ export default function App() {
   const [panel, setPanel] = useState<Panel>(null)
   const [modelSource, setModelSource] = useState<ModelSource>({ type: 'sprites', sprites: {} })
   const {
-    messages, isStreaming, addUserMessage, appendAssistantChunk, finishAssistantMessage
+    messages, isStreaming, addUserMessage, appendAssistantChunk, finishAssistantMessage, setMessages
   } = useChatStore()
   const { expression, setExpression } = useAvatarStore()
   const [mood, setMood] = useState('neutral')
+  const [modelInfo, setModelInfo] = useState<{ provider: string; model: string; localModel: string | null }>({ provider: 'openai', model: '', localModel: null })
+  const [lastRoute, setLastRoute] = useState<'local' | 'cloud' | null>(null)
 
   // Init
   useEffect(() => {
@@ -51,6 +53,15 @@ export default function App() {
           }
           setModelSource({ type: 'sprites', sprites: source })
         }
+      } catch {}
+      // Restore the most recent conversation so the pet remembers
+      try {
+        const history = await window.inkAPI.getChatHistory()
+        if (history.length > 0) setMessages(history as any)
+      } catch {}
+      try {
+        const info = await window.inkAPI.getModelInfo()
+        setModelInfo(info)
       } catch {}
       setLoading(false)
     }
@@ -85,6 +96,7 @@ export default function App() {
     addUserMessage(message); setExpression('happy')
     try {
       const r = await window.inkAPI.chat(message)
+      if (r.route === 'local' || r.route === 'cloud') setLastRoute(r.route)
       if (!r.success) {
         appendAssistantChunk(r.budgetBlocked ? '预算已用完…我们先用本地模型聊天吧？' : '抱歉，我暂时无法回应...')
         finishAssistantMessage(); setExpression('sad')
@@ -111,7 +123,7 @@ export default function App() {
     setScreen('desktop'); window.inkAPI.setPetMode()
   }, [])
 
-  if (loading) return <div className="app-container" />
+  if (loading) return <div className="app-container" style={{ background: 'var(--paper)', borderRadius: 'var(--radius-lg)' }} />
 
   if (screen === 'wizard') {
     return (
@@ -145,7 +157,7 @@ export default function App() {
       </div>
       <div className="main-content">
         {panel === 'chat' && (
-          <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} onSend={handleSend} onHeaderClick={handleBackToPet} />
+          <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onHeaderClick={handleBackToPet} />
         )}
         {panel === 'settings' && (
           <SettingsView modelSource={modelSource} onModelSourceChange={setModelSource} onBack={() => setPanel('chat')} />
