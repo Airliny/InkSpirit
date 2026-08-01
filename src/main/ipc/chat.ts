@@ -6,11 +6,12 @@ import { getUsageSummary, getMonthlyBudget } from '../../core/cost/usage'
 import { cacheKey, getCachedReply, setCachedReply } from '../../core/cost/cache'
 import { getCurrentEmotion, emotionToExpression } from '../../core/soul/emotion'
 import { getDatabase } from '../../core/database'
+import { countMemories } from '../../core/soul/memory'
 
 export function registerChatHandlers(agent: Agent): void {
   ipcMain.handle('agent:chat', async (_event, message: string) => {
     const win = getMainWindow()
-    if (!win) return { success: false, error: 'No window' }
+    if (!win || win.isDestroyed()) return { success: false, error: 'No window' }
 
     try {
       const settings = getRouterSettings()
@@ -43,28 +44,43 @@ export function registerChatHandlers(agent: Agent): void {
       }
 
       const stream = route === 'local'
-        ? await agent.chatLocal(message)
+        ? await chatWithLocalFallback()
         : await agent.chat(message)
+
+      async function chatWithLocalFallback() {
+        try {
+          return await agent.chatLocal(message)
+        } catch {
+          // Local model unavailable (Ollama stopped / model removed) — fall back to cloud
+          return agent.chat(message)
+        }
+      }
 
       let fullResponse = ''
       for await (const chunk of stream) {
         fullResponse += chunk
+        if (win.isDestroyed()) break
         win.webContents.send('agent:chat-chunk', chunk)
       }
 
-      win.webContents.send('agent:chat-done')
+      if (!win.isDestroyed()) win.webContents.send('agent:chat-done')
 
-      if (clientInfo && fullResponse) {
+      // Only cache substantive replies — cold/terse responses (e.g. "（沉默）")
+      // shouldn't be reused verbatim
+      if (clientInfo && fullResponse.length >= 8) {
         const mood = emotionToExpression(getCurrentEmotion().dominantEmotion)
         setCachedReply(cacheKey(clientInfo.provider, clientInfo.model, `${mood}|${message}`), fullResponse)
       }
 
       return { success: true, route }
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      const raw = error instanceof Error ? error.message : 'Unknown error'
+      const friendly = /401|403|api[_ ]?key|unauthorized|invalid.*key/i.test(raw)
+        ? 'API Key 无效或未配置，请到设置中检查'
+        : /ECONNREFUSED|fetch failed|network/i.test(raw)
+          ? '无法连接模型服务，请检查网络或 Ollama 是否启动'
+          : raw
+      return { success: false, error: friendly }
     }
   })
 
@@ -73,7 +89,8 @@ export function registerChatHandlers(agent: Agent): void {
       emotion: agent.getEmotionState(),
       personality: agent.getPersonality(),
       relationshipStage: agent.getRelationshipStage(),
-      history: agent.getConversationHistory()
+      history: agent.getConversationHistory(),
+      memories: countMemories()
     }
   })
 

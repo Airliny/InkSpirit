@@ -21,7 +21,11 @@ export function ChatView({ modelSource, state, messages, isStreaming, modelInfo,
 
   useEffect(() => {
     const el = bubblesRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    // Auto-scroll only when the user is already near the bottom, so reading
+    // older messages isn't interrupted by streaming output
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    if (nearBottom) el.scrollTop = el.scrollHeight
   }, [messages])
 
   const modelLabel = lastRoute === 'local' && modelInfo.localModel
@@ -32,7 +36,7 @@ export function ChatView({ modelSource, state, messages, isStreaming, modelInfo,
     <div className="chat-panel">
       <div className="chat-pet-avatar" onClick={onHeaderClick}>
         {modelSource.type === 'live2d' ? (
-          <Live2DView modelPath={modelSource.live2d.modelPath} width={72} height={72} />
+          <Live2DView modelPath={modelSource.live2d.modelPath} state={state} width={72} height={72} />
         ) : (
           <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={state} size={72} />
         )}
@@ -49,16 +53,7 @@ export function ChatView({ modelSource, state, messages, isStreaming, modelInfo,
         ))}
       </div>
       <ChatInput onSend={onSend} disabled={isStreaming} />
-      <div style={{
-        padding: '4px 14px 8px',
-        fontSize: 10,
-        color: 'var(--ink-faint)',
-        textAlign: 'center',
-        userSelect: 'none',
-        letterSpacing: 0.5
-      }}>
-        {modelLabel}
-      </div>
+      <div className="chat-model-label">{modelLabel}</div>
     </div>
   )
 }

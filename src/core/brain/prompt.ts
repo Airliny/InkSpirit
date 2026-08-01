@@ -129,6 +129,6 @@ function getTimeHint(): string {
   if (hour >= 12 && hour < 14) return '现在是中午，刚吃过饭有点犯困。'
   if (hour >= 14 && hour < 18) return '现在是下午，你状态平稳。'
   if (hour >= 18 && hour < 21) return '现在是傍晚，天色渐暗，你开始放松。'
-  if (hour >= 21 && hour < 0) return '现在是晚上，你开始困了，话变少。'
+  if (hour >= 21) return '现在是晚上，你开始困了，话变少。'
   return '现在是深夜。'
 }

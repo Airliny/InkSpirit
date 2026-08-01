@@ -6,7 +6,7 @@ let initialized = false
 
 function send(channel: string, data?: unknown): void {
   const win = getMainWindow()
-  if (win) win.webContents.send(channel, data)
+  if (win && !win.isDestroyed()) win.webContents.send(channel, data)
 }
 
 export function initUpdater(): void {

@@ -18,7 +18,8 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Ignore IME composition Enter (Chinese/Japanese input method confirm)
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       handleSend()
     }

@@ -64,18 +64,18 @@ export function WizardView({ onComplete }: WizardViewProps) {
         <div className="wizard-step">
           <h2>选择形象类型</h2>
           <p className="wizard-desc">两种模式能力不同，请按需选择</p>
-          <div style={{ width: '100%', fontSize: 11.5, color: 'var(--ink-faint)', lineHeight: 1.7, marginBottom: 6, textAlign: 'left' }}>
-            <div style={{ color: 'var(--cinnabar)', fontWeight: 600 }}>Live2D：单模型导入，自带呼吸/眨眼动画；情绪切换动作取决于模型是否带对应动作。</div>
-            <div style={{ color: 'var(--moss)', fontWeight: 600, marginTop: 4 }}>精灵图：可逐动作导入 10 张图（默认/行走/睡觉/坐着/伸懒腰/打哈欠/惊讶/开心/难过/喜欢），未导入的动作自动用默认图。</div>
+          <div style={{ width: '100%', fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.7, marginBottom: 6, textAlign: 'left' }}>
+            <div style={{ color: 'var(--accent)', fontWeight: 600 }}>Live2D：单模型导入，自带呼吸/眨眼动画；情绪切换动作取决于模型是否带对应动作。</div>
+            <div style={{ color: 'var(--green)', fontWeight: 600, marginTop: 4 }}>精灵图：可逐动作导入 10 张图（默认/行走/睡觉/坐着/伸懒腰/打哈欠/惊讶/开心/难过/喜欢），未导入的动作自动用默认图。</div>
           </div>
           <div className="wizard-actions" style={{ flexDirection: 'column', gap: 12 }}>
             <button className="wizard-btn" style={{ padding: '22px', width: '100%' }} onClick={() => setStep('import_live2d')}>
-              <div style={{ fontSize: 26, marginBottom: 8, fontFamily: 'var(--font-serif)', letterSpacing: 2 }}>L2D</div>
+              <div style={{ fontSize: 26, marginBottom: 8, fontFamily: 'var(--font)', letterSpacing: 2 }}>L2D</div>
               <div style={{ fontSize: 15, fontWeight: 600 }}>Live2D 模型</div>
               <p className="wizard-sub" style={{ marginBottom: 0, marginTop: 4 }}>导入 .model3.json 模型文件夹</p>
             </button>
             <button className="wizard-btn" style={{ padding: '22px', width: '100%' }} onClick={() => setStep('import_sprites')}>
-              <div style={{ fontSize: 26, marginBottom: 8, fontFamily: 'var(--font-serif)', letterSpacing: 2 }}>图</div>
+              <div style={{ fontSize: 26, marginBottom: 8, fontFamily: 'var(--font)', letterSpacing: 2 }}>图</div>
               <div style={{ fontSize: 15, fontWeight: 600 }}>精灵图</div>
               <p className="wizard-sub" style={{ marginBottom: 0, marginTop: 4 }}>导入 PNG / GIF 图片作为形象</p>
             </button>
@@ -89,7 +89,7 @@ export function WizardView({ onComplete }: WizardViewProps) {
           <p className="wizard-desc">选择模型文件夹中的 .model3.json 文件</p>
           <p className="wizard-sub">会自动复制整个模型文件夹</p>
           <div className={`wizard-dropzone ${live2dPath ? 'has-file' : ''}`} onClick={handleImportLive2D} style={{ height: 140 }}>
-            {importing ? <span>导入中...</span> : live2dPath ? <span style={{ color: 'var(--moss)' }}>模型已导入</span> : <><span className="wizard-dropzone-icon">+</span><span>点击选择 .model3.json</span></>}
+            {importing ? <span>导入中...</span> : live2dPath ? <span style={{ color: 'var(--green)' }}>模型已导入</span> : <><span className="wizard-dropzone-icon">+</span><span>点击选择 .model3.json</span></>}
           </div>
           <div className="wizard-actions">
             <button className="wizard-btn" onClick={() => setStep('choose_type')}>上一步</button>

@@ -34,27 +34,42 @@ const EVOLVE_RATE = 0.015
 const EVOLVE_COOLDOWN_HOURS = 6
 const MIN_TRAIT_DELTA = 0.005
 
+let cachedPersonality: { at: number; p: Personality } | null = null
+const PERSONALITY_TTL_MS = 5000
+
+/** Reset in-memory personality (e.g. after importing a backup) */
+export function clearPersonalityCache(): void {
+  cachedPersonality = null
+}
+
 export function getActivePersonality(): Personality {
+  if (cachedPersonality && Date.now() - cachedPersonality.at < PERSONALITY_TTL_MS) {
+    return cachedPersonality.p
+  }
   const db = getDatabase()
   const row = db
     .prepare('SELECT * FROM personalities WHERE is_active = 1 ORDER BY version DESC LIMIT 1')
     .get() as Record<string, unknown> | undefined
   if (!row) {
-    return {
+    const fallback: Personality = {
       id: 'default_personality',
       version: 1,
       isActive: true,
       traits: { ...DEFAULT_TRAITS },
       createdAt: Date.now()
     }
+    cachedPersonality = { at: Date.now(), p: fallback }
+    return fallback
   }
-  return {
+  const p: Personality = {
     id: row.id as string,
     version: row.version as number,
     isActive: (row.is_active as number) === 1,
     traits: JSON.parse(row.traits_json as string) as PersonalityTraits,
     createdAt: row.created_at as number
   }
+  cachedPersonality = { at: Date.now(), p }
+  return p
 }
 
 export function evolvePersonality(
@@ -101,6 +116,7 @@ function maxTraitDelta(a: PersonalityTraits, b: PersonalityTraits): number {
 }
 
 export function savePersonality(traits: PersonalityTraits): void {
+  cachedPersonality = null // invalidate before writing
   const db = getDatabase()
   const current = getActivePersonality()
   db.prepare('UPDATE personalities SET is_active = 0 WHERE is_active = 1').run()
@@ -108,6 +124,28 @@ export function savePersonality(traits: PersonalityTraits): void {
   db.prepare(
     'INSERT INTO personalities (id, version, is_active, traits_json, created_at) VALUES (?, ?, 1, ?, ?)'
   ).run(id, current.version + 1, JSON.stringify(traits), Date.now())
+  cachedPersonality = null
+}
+
+export type ReminderTone = 'gentle' | 'playful' | 'direct'
+
+export interface BehaviorStyle {
+  greetFrequency: number
+  reminderTone: ReminderTone
+  curiosity: number
+  idleThoughtChance: number
+}
+
+/** Derive how the pet behaves from its current personality (behavior feedback loop) */
+export function getBehaviorStyle(): BehaviorStyle {
+  const p = getActivePersonality().traits
+  const tone: ReminderTone = p.humor > 0.6 ? 'playful' : p.gentleness > 0.6 ? 'gentle' : 'direct'
+  return {
+    greetFrequency: 0.15 + p.proactiveness * 0.35,
+    reminderTone: tone,
+    curiosity: p.curiosity,
+    idleThoughtChance: 0.05 + p.curiosity * 0.1 + p.expressiveness * 0.08
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {

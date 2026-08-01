@@ -54,7 +54,7 @@ export function setPetMode(): void {
   mainWindow.setResizable(false)
   mainWindow.setHasShadow(false)
   mainWindow.setIgnoreMouseEvents(false)
-  mainWindow.webContents.send('window:mode', 'pet')
+  if (!mainWindow.isDestroyed()) mainWindow.webContents.send('window:mode', 'pet')
 }
 
 export function setPanelMode(): void {
@@ -65,7 +65,7 @@ export function setPanelMode(): void {
   mainWindow.setHasShadow(true)
   mainWindow.setIgnoreMouseEvents(false)
   mainWindow.center()
-  mainWindow.webContents.send('window:mode', 'panel')
+  if (!mainWindow.isDestroyed()) mainWindow.webContents.send('window:mode', 'panel')
 }
 
 export function toggleMode(): void {
@@ -79,7 +79,7 @@ export function toggleMode(): void {
 export function moveWindowBy(dx: number, dy: number): void {
   if (!mainWindow || !isPetMode) return
   const [x, y] = mainWindow.getPosition()
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const { width, height } = workAreaFor(mainWindow)
   const newX = Math.max(0, Math.min(width - 200, x + dx))
   const newY = Math.max(0, Math.min(height - 200, y + dy))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
@@ -87,10 +87,21 @@ export function moveWindowBy(dx: number, dy: number): void {
 
 export function moveWindowTo(x: number, y: number): void {
   if (!mainWindow || !isPetMode) return
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const { width, height } = workAreaFor(mainWindow)
   const newX = Math.max(0, Math.min(width - 200, x))
   const newY = Math.max(0, Math.min(height - 200, y))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
+}
+
+/** Work area of the display the window currently sits on (multi-monitor aware) */
+function workAreaFor(win: BrowserWindow): { width: number; height: number } {
+  const [x, y] = win.getPosition()
+  try {
+    const display = screen.getDisplayNearestPoint({ x, y })
+    return display.workAreaSize
+  } catch {
+    return screen.getPrimaryDisplay().workAreaSize
+  }
 }
 
 export function startWindowDrag(): void {
@@ -105,7 +116,7 @@ export function updateWindowDrag(): void {
   const cursor = screen.getCursorScreenPoint()
   const dx = cursor.x - dragOrigin.mouseX
   const dy = cursor.y - dragOrigin.mouseY
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const { width, height } = workAreaFor(mainWindow)
   const newX = Math.max(0, Math.min(width - 200, dragOrigin.winX + dx))
   const newY = Math.max(0, Math.min(height - 200, dragOrigin.winY + dy))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))

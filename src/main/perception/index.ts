@@ -1,5 +1,3 @@
-export { startActivityMonitor, getActivityState } from './activityMonitor'
-export type { ActivityState } from './activityMonitor'
 export { classifyWindow, isDisturbable } from './contextDetector'
 export type { WindowContext } from './contextDetector'
 export { getSession, getTotalWorkMinutes, getContinuousWorkMinutes, markActive, markIdle, resetSession } from './timeTracker'

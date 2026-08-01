@@ -1,12 +1,16 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { getDatabase } from '../../core/database'
-import { setConfig, getConfig } from '../../core/config'
+import { setConfig, getConfig, clearConfigCache } from '../../core/config'
+import { clearEmotionCache } from '../../core/soul/emotion'
+import { clearRelationshipCache } from '../../core/soul/relationship'
+import { clearPersonalityCache } from '../../core/soul/personality'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { getMainWindow } from '../windowManager'
+import { Agent } from '../../core/agent'
 
-export function registerDataHandlers(): void {
+export function registerDataHandlers(agent: Agent): void {
   // Live2D model import: select the .model3.json and copy entire folder
   ipcMain.handle('model:importLive2D', async () => {
     const win = getMainWindow()
@@ -24,6 +28,19 @@ export function registerDataHandlers(): void {
     const jsonFileName = path.basename(srcJsonPath)
 
     const avatarsDir = path.join(app.getPath('userData'), 'avatars')
+    // Remove the previous Live2D model folder so re-imports don't accumulate
+    const oldL2dPath = getConfig('live2d_path')
+    if (oldL2dPath) {
+      try {
+        const oldDir = path.dirname(oldL2dPath)
+        if (oldDir.startsWith(avatarsDir) && oldDir !== avatarsDir && path.basename(oldDir).startsWith('live2d_')) {
+          fs.rmSync(oldDir, { recursive: true, force: true })
+        }
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+
     const l2dDir = path.join(avatarsDir, 'live2d_' + Date.now())
     if (!fs.existsSync(l2dDir)) fs.mkdirSync(l2dDir, { recursive: true })
 
@@ -57,6 +74,9 @@ export function registerDataHandlers(): void {
       fs.mkdirSync(avatarsDir, { recursive: true })
     }
 
+    // Remove the previous file for this sprite key so re-imports don't accumulate
+    removeOldSprite(avatarsDir, spriteKey)
+
     const ext = path.extname(srcPath)
     const destName = `${spriteKey}_${Date.now()}${ext}`
     const destPath = path.join(avatarsDir, destName)
@@ -78,6 +98,9 @@ export function registerDataHandlers(): void {
     if (!fs.existsSync(avatarsDir)) {
       fs.mkdirSync(avatarsDir, { recursive: true })
     }
+
+    // Remove the previous file for this sprite key so re-imports don't accumulate
+    removeOldSprite(avatarsDir, spriteKey)
 
     const ext = path.extname(srcPath)
     const destName = `${spriteKey}_${Date.now()}${ext}`
@@ -114,7 +137,9 @@ export function registerDataHandlers(): void {
 
   // Check if any model is configured
   ipcMain.handle('model:hasModel', () => {
-    return getConfig('live2d_path') !== null || getConfig('sprite_idle') !== null
+    if (getConfig('live2d_path')) return true
+    const spriteKeys = ['idle', 'walk', 'sleep', 'sit', 'stretch', 'yawn', 'surprised', 'happy', 'sad', 'love']
+    return spriteKeys.some(k => !!getConfig(`sprite_${k}`))
   })
 
   // Get model type
@@ -127,50 +152,69 @@ export function registerDataHandlers(): void {
     return getConfig('live2d_path')
   })
 
-  // Data export: dump all tables to a JSON file
+  // Data export: dump all tables + avatar assets to a backup folder
   ipcMain.handle('data:export', async () => {
-    const result = await dialog.showSaveDialog({
-      filters: [{ name: 'InkSpirit Data', extensions: ['inkdata'] }]
+    const result = await dialog.showOpenDialog({
+      title: '选择备份保存位置',
+      properties: ['openDirectory', 'createDirectory']
     })
-    if (result.canceled || !result.filePath) return { success: false, error: 'Cancelled' }
+    if (result.canceled || !result.filePaths[0]) return { success: false, error: 'Cancelled' }
 
-    const db = getDatabase()
-    const tables = [
-      'config',
-      'conversations',
-      'emotion_snapshots',
-      'personalities',
-      'relationships',
-      'memories',
-      'behavior_logs'
-    ]
-    const dump: Record<string, unknown[]> = {}
-    for (const table of tables) {
-      try {
-        const rows = db.prepare(`SELECT * FROM ${table}`).all()
-        dump[table] = rows
-      } catch {
-        dump[table] = []
-      }
-    }
+    const dir = result.filePaths[0]
+    const base = path.join(dir, `inkspirit-backup-${Date.now()}`)
     try {
-      fs.writeFileSync(result.filePath, JSON.stringify({ app: 'inkspirit', version: 1, data: dump }), 'utf8')
-      return { success: true, filePath: result.filePath }
+      fs.mkdirSync(base, { recursive: true })
+
+      const db = getDatabase()
+      const tables = [
+        'config',
+        'conversations',
+        'emotion_snapshots',
+        'personalities',
+        'relationships',
+        'memories',
+        'behavior_logs'
+      ]
+      const dump: Record<string, unknown[]> = {}
+      for (const table of tables) {
+        try {
+          const rows = db.prepare(`SELECT * FROM ${table}`).all()
+          dump[table] = rows
+        } catch {
+          dump[table] = []
+        }
+      }
+      fs.writeFileSync(path.join(base, 'backup.json'), JSON.stringify({ app: 'inkspirit', version: 2, data: dump }), 'utf8')
+
+      // Include the avatar assets so sprites/Live2D survive a restore
+      const avatarsDir = path.join(app.getPath('userData'), 'avatars')
+      if (fs.existsSync(avatarsDir)) {
+        copyFolderRecursive(avatarsDir, path.join(base, 'avatars'))
+      }
+      return { success: true, filePath: base }
     } catch (e: any) {
       return { success: false, error: e?.message || '写入失败' }
     }
   })
 
-  // Data import: read a JSON dump and replace table contents
+  // Data import: restore tables + avatar assets from a backup folder or legacy .inkdata file
   ipcMain.handle('data:import', async () => {
     const result = await dialog.showOpenDialog({
-      filters: [{ name: 'InkSpirit Data', extensions: ['inkdata'] }]
+      title: '选择备份文件夹（或旧版 .inkdata 文件）',
+      properties: ['openFile', 'openDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) return { success: false, error: 'Cancelled' }
 
-    const filePath = result.filePaths[0]
+    const selected = result.filePaths[0]
     try {
-      const raw = fs.readFileSync(filePath, 'utf8')
+      const stat = fs.statSync(selected)
+      const isDir = stat.isDirectory()
+      const jsonPath = isDir ? path.join(selected, 'backup.json') : selected
+      if (!fs.existsSync(jsonPath)) {
+        return { success: false, error: '该文件夹不是有效的备份（缺少 backup.json）' }
+      }
+
+      const raw = fs.readFileSync(jsonPath, 'utf8')
       const parsed = JSON.parse(raw) as { app?: string; version?: number; data: Record<string, unknown[]> }
       if (parsed.app !== 'inkspirit' || !parsed.data) {
         return { success: false, error: '无效的备份文件' }
@@ -204,7 +248,24 @@ export function registerDataHandlers(): void {
         db.exec('ROLLBACK')
         throw e
       }
-      return { success: true, filePath }
+
+      // Restore avatar assets if the backup folder includes them
+      if (isDir) {
+        const srcAvatars = path.join(selected, 'avatars')
+        const destAvatars = path.join(app.getPath('userData'), 'avatars')
+        if (fs.existsSync(srcAvatars)) {
+          fs.rmSync(destAvatars, { recursive: true, force: true })
+          copyFolderRecursive(srcAvatars, destAvatars)
+        }
+      }
+
+      // In-memory caches are now stale — drop them
+      clearConfigCache()
+      clearEmotionCache()
+      clearRelationshipCache()
+      clearPersonalityCache()
+      agent.resetClients()
+      return { success: true, filePath: selected }
     } catch (e: any) {
       return { success: false, error: e?.message || '导入失败' }
     }
@@ -221,5 +282,20 @@ function copyFolderRecursive(src: string, dest: string): void {
     } else {
       fs.copyFileSync(srcPath, destPath)
     }
+  }
+}
+
+/** Delete the previously imported file for a sprite key (keep avatars tidy) */
+function removeOldSprite(avatarsDir: string, spriteKey: string): void {
+  try {
+    if (!fs.existsSync(avatarsDir)) return
+    const entries = fs.readdirSync(avatarsDir)
+    for (const entry of entries) {
+      if (entry.startsWith(`${spriteKey}_`)) {
+        fs.rmSync(path.join(avatarsDir, entry), { force: true })
+      }
+    }
+  } catch {
+    // ignore cleanup errors
   }
 }

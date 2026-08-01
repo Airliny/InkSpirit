@@ -1,6 +1,5 @@
 /* =============================================
-   砚灵 InkSpirit — 水墨宣纸主题
-   paper 宣纸 / ink 墨 / cinnabar 朱砂
+   砚灵 InkSpirit — 简洁大气 · 苹果风 · #66CCFF
    ============================================= */
 
 * {
@@ -10,27 +9,28 @@
 }
 
 :root {
-  --paper: #f6f1e5;
-  --paper-deep: #efe7d4;
-  --paper-shadow: rgba(90, 74, 45, 0.08);
-  --ink: #2b2a26;
-  --ink-soft: #57534b;
-  --ink-faint: #8d8778;
-  --line: rgba(43, 42, 38, 0.14);
-  --line-strong: rgba(43, 42, 38, 0.28);
-  --cinnabar: #b3402a;
-  --cinnabar-deep: #8e2f1d;
-  --cinnabar-soft: rgba(179, 64, 42, 0.1);
-  --moss: #4a6b53;
-  --moss-soft: rgba(74, 107, 83, 0.12);
-  --ochre: #a67c2e;
-  --ochre-soft: rgba(166, 124, 46, 0.12);
-  --radius-lg: 18px;
+  --bg: #ffffff;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #f0f0f4;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #aeaeb2;
+  --accent: #66ccff;
+  --accent-deep: #4db8e8;
+  --accent-soft: rgba(102, 204, 255, 0.14);
+  --accent-strong: rgba(102, 204, 255, 0.35);
+  --green: #34c759;
+  --orange: #ff9f0a;
+  --red: #ff3b30;
+  --separator: rgba(0, 0, 0, 0.08);
+  --separator-strong: rgba(0, 0, 0, 0.14);
+  --radius-xl: 22px;
+  --radius-lg: 16px;
   --radius-md: 12px;
   --radius-sm: 8px;
-  --font-serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', Georgia, serif;
-  --font-sans: -apple-system, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
-  --shadow-paper: 0 2px 6px var(--paper-shadow), 0 10px 28px rgba(90, 74, 45, 0.1);
+  --shadow-panel: 0 12px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-soft: 0 2px 10px rgba(0, 0, 0, 0.06);
+  --font: -apple-system, 'SF Pro Text', 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
 }
 
 html, body, #root {
@@ -38,8 +38,9 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   background: transparent;
-  font-family: var(--font-sans);
+  font-family: var(--font);
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* =============================================
@@ -65,36 +66,34 @@ html, body, #root {
   position: relative;
 }
 
-/* Pet bubbles — 墨迹宣纸感 */
+/* Pet bubbles — clean white cards */
 .pet-bubble {
-  padding: 7px 15px;
-  border-radius: 3px 14px 14px 14px;
+  padding: 8px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--separator);
   font-size: 12.5px;
   font-weight: 500;
-  white-space: nowrap;
+  color: var(--text-primary);
+  max-width: 150px;
+  white-space: normal;
+  word-break: break-word;
   pointer-events: none;
-  animation: bubblePop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: bubblePop 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 10;
 }
 
-.pet-bubble.speak {
-  background: var(--paper);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  box-shadow: 0 2px 8px var(--paper-shadow);
-}
-
 .pet-bubble.thought {
-  background: transparent;
-  border-bottom: 1px dashed var(--line-strong);
-  color: var(--ink-faint);
+  background: rgba(255, 255, 255, 0.72);
+  border-style: dashed;
+  color: var(--text-secondary);
   font-style: italic;
-  border-radius: 0;
-  padding: 2px 4px;
+  font-weight: 400;
 }
 
 @keyframes bubblePop {
-  from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.9); }
+  from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.92); }
   to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }
 
@@ -103,9 +102,8 @@ html, body, #root {
   position: absolute;
   top: 8px;
   right: 22px;
-  font-family: var(--font-serif);
   font-size: 14px;
-  color: var(--ink-faint);
+  color: var(--text-tertiary);
   animation: zzzFloat 2s ease-in-out infinite;
   pointer-events: none;
 }
@@ -140,7 +138,7 @@ html, body, #root {
 }
 
 /* =============================================
-   Panel Mode — 宣纸卷轴
+   Panel Mode — clean floating card
    ============================================= */
 
 .app-container {
@@ -148,49 +146,44 @@ html, body, #root {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--paper);
-  border-radius: var(--radius-lg);
+  background: var(--bg);
+  border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: var(--shadow-paper);
+  box-shadow: var(--shadow-panel);
 }
 
 .title-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--paper-deep);
-  border-bottom: 1px solid var(--line);
+  padding: 12px 18px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--separator);
   -webkit-app-region: drag;
   user-select: none;
 }
 
 .title-text {
-  font-family: var(--font-serif);
   font-size: 13px;
-  color: var(--ink-soft);
-  letter-spacing: 2px;
-  position: relative;
-  padding-left: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
-/* 朱砂印点 */
 .title-text::before {
   content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 6px;
-  background: var(--cinnabar);
-  border-radius: 1px;
-  opacity: 0.85;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .title-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   -webkit-app-region: no-drag;
 }
 
@@ -199,29 +192,29 @@ html, body, #root {
   height: 28px;
   border: none;
   background: transparent;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 14px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .title-btn:hover {
-  background: var(--cinnabar-soft);
-  color: var(--cinnabar);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .main-content {
   flex: 1;
   overflow: hidden;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 /* =============================================
-   Chat Panel
+   Chat Panel — iMessage style
    ============================================= */
 
 .chat-panel {
@@ -233,22 +226,22 @@ html, body, #root {
 .chat-pet-avatar {
   display: flex;
   justify-content: center;
-  padding: 16px 0 8px;
+  padding: 16px 0 6px;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: transform 0.15s ease;
 }
 
 .chat-pet-avatar:hover {
-  transform: scale(1.06);
+  transform: scale(1.05);
 }
 
 .chat-bubbles {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 16px;
+  padding: 8px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .chat-bubbles::-webkit-scrollbar {
@@ -256,11 +249,11 @@ html, body, #root {
 }
 
 .chat-bubbles::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
+  background: var(--separator-strong);
   border-radius: 4px;
 }
 
-/* Empty state — 题跋 */
+/* Empty state */
 .chat-empty {
   display: flex;
   flex-direction: column;
@@ -270,13 +263,12 @@ html, body, #root {
 }
 
 .chat-empty-bubble {
-  padding: 10px 16px;
-  background: var(--paper-deep);
-  border: 1px solid var(--line);
-  border-radius: 3px 14px 14px 14px;
-  color: var(--ink-soft);
+  padding: 11px 17px;
+  background: var(--bg-secondary);
+  border-radius: 18px 18px 18px 5px;
+  color: var(--text-secondary);
   font-size: 13px;
-  animation: bubbleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: bubbleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .chat-empty-bubble.delay {
@@ -285,30 +277,29 @@ html, body, #root {
   animation-fill-mode: forwards;
 }
 
-/* Chat bubble */
+/* Chat bubble — iMessage style */
 .chat-bubble {
-  max-width: 85%;
+  max-width: 82%;
   padding: 10px 15px;
   font-size: 13.5px;
-  line-height: 1.6;
+  line-height: 1.55;
   word-break: break-word;
-  animation: bubbleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: bubbleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .chat-bubble.user {
   align-self: flex-end;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: 14px 3px 14px 14px;
-  box-shadow: 0 2px 10px rgba(43, 42, 38, 0.18);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 18px 18px 5px 18px;
+  box-shadow: 0 2px 8px var(--accent-strong);
 }
 
 .chat-bubble.assistant {
   align-self: flex-start;
-  background: var(--paper-deep);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  border-radius: 3px 14px 14px 14px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 18px 18px 18px 5px;
 }
 
 .chat-bubble.streaming::after {
@@ -316,9 +307,9 @@ html, body, #root {
   display: inline-block;
   width: 5px;
   height: 13px;
-  background: var(--cinnabar);
+  background: var(--accent-deep);
   margin-left: 3px;
-  border-radius: 2px;
+  border-radius: 3px;
   vertical-align: text-bottom;
   animation: cursorBlink 0.8s ease-in-out infinite;
 }
@@ -333,11 +324,11 @@ html, body, #root {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Chat input — 毛笔落款 */
+/* Chat input — pill, iOS style */
 .chat-input-container {
   padding: 10px 14px;
-  background: var(--paper-deep);
-  border-top: 1px solid var(--line);
+  background: var(--bg);
+  border-top: 1px solid var(--separator);
   display: flex;
   gap: 8px;
   align-items: center;
@@ -345,39 +336,39 @@ html, body, #root {
 
 .chat-input {
   flex: 1;
-  padding: 9px 14px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  color: var(--ink);
-  font-size: 13px;
-  font-family: var(--font-sans);
+  padding: 11px 18px;
+  background: var(--bg-secondary);
+  border: none;
+  border-radius: 22px;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-family: var(--font);
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .chat-input:focus {
-  border-color: var(--ink-soft);
-  box-shadow: 0 0 0 3px rgba(43, 42, 38, 0.06);
+  background: var(--bg-tertiary);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 .chat-input::placeholder {
-  color: var(--ink-faint);
+  color: var(--text-tertiary);
 }
 
 .chat-send-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border: none;
-  border-radius: var(--radius-sm);
-  background: var(--cinnabar);
-  color: var(--paper);
-  font-size: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
@@ -388,18 +379,29 @@ html, body, #root {
 }
 
 .chat-send-btn:not(:disabled):hover {
-  background: var(--cinnabar-deep);
-  transform: translateY(-1px);
+  background: var(--accent-deep);
+  transform: scale(1.06);
+}
+
+/* Model label under input */
+.chat-model-label {
+  padding: 2px 14px 8px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-align: center;
+  user-select: none;
+  letter-spacing: 0.2px;
 }
 
 /* =============================================
-   Settings — 册页
+   Settings — grouped iOS-style cards
    ============================================= */
 
 .settings-view {
-  padding: 20px 18px 28px;
+  padding: 18px 14px 28px;
   height: 100%;
   overflow-y: auto;
+  background: var(--bg-secondary);
 }
 
 .settings-view::-webkit-scrollbar {
@@ -407,57 +409,33 @@ html, body, #root {
 }
 
 .settings-view::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
+  background: var(--separator-strong);
   border-radius: 4px;
 }
 
 .settings-view h3 {
-  color: var(--ink);
-  font-family: var(--font-serif);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 3px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.settings-view h3::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--line);
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin: 4px 4px 14px;
 }
 
 .settings-section {
-  margin-bottom: 20px;
-  background: var(--paper-deep);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  margin-bottom: 18px;
+  background: var(--bg);
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
+  box-shadow: var(--shadow-soft);
 }
 
 .settings-section h4 {
-  color: var(--ink-soft);
-  font-family: var(--font-serif);
-  font-size: 12.5px;
+  color: var(--text-secondary);
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
   margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-/* 印章小方块 */
-.settings-section h4::before {
-  content: '';
-  width: 9px;
-  height: 9px;
-  background: var(--cinnabar);
-  border-radius: 2px;
-  opacity: 0.75;
 }
 
 .settings-sprites {
@@ -470,12 +448,11 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
   font-size: 13px;
-  color: var(--ink-soft);
+  color: var(--text-primary);
 }
 
 .settings-sprite-row span:first-child {
@@ -485,29 +462,28 @@ html, body, #root {
 
 .settings-sprite-status {
   font-size: 11px;
-  color: var(--ink-faint);
+  color: var(--text-tertiary);
 }
 
 .settings-sprite-status.has {
-  color: var(--moss);
+  color: var(--green);
 }
 
 .settings-sprite-btn {
-  padding: 4px 13px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ink-soft);
+  padding: 5px 14px;
+  border: none;
+  border-radius: 16px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: var(--font-sans);
+  transition: all 0.15s ease;
+  font-family: var(--font);
 }
 
 .settings-sprite-btn:hover:not(:disabled) {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  background: var(--accent-soft);
 }
 
 .settings-sprite-btn:disabled {
@@ -525,57 +501,56 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
 }
 
 .settings-form input,
 .settings-form select {
-  padding: 9px 13px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--ink);
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
   font-size: 13.5px;
-  font-family: var(--font-sans);
+  font-family: var(--font);
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .settings-form input:focus,
 .settings-form select:focus {
-  border-color: var(--ink-soft);
-  box-shadow: 0 0 0 3px rgba(43, 42, 38, 0.06);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  background: var(--bg-tertiary);
 }
 
 .settings-form select {
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238d8778' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23aeaeb2' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
+  background-position: right 13px center;
   padding-right: 32px;
 }
 
 .settings-save-btn {
-  padding: 9px 18px;
-  background: var(--cinnabar);
-  color: var(--paper);
+  padding: 10px 18px;
+  background: var(--accent);
+  color: #fff;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: 13.5px;
   font-weight: 600;
-  font-family: var(--font-sans);
+  font-family: var(--font);
   cursor: pointer;
-  transition: all 0.2s ease;
-  letter-spacing: 1px;
+  transition: all 0.15s ease;
 }
 
 .settings-save-btn:hover:not(:disabled) {
-  background: var(--cinnabar-deep);
+  background: var(--accent-deep);
   transform: translateY(-1px);
-  box-shadow: 0 3px 10px var(--cinnabar-soft);
+  box-shadow: 0 4px 14px var(--accent-strong);
 }
 
 .settings-save-btn:disabled {
@@ -584,27 +559,26 @@ html, body, #root {
 }
 
 .settings-back-btn {
-  margin-top: 14px;
-  padding: 8px 16px;
-  background: transparent;
-  color: var(--ink-soft);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  margin-top: 4px;
+  padding: 9px 18px;
+  background: var(--bg);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
   font-size: 13px;
-  font-family: var(--font-sans);
+  font-weight: 500;
+  font-family: var(--font);
   cursor: pointer;
-  transition: all 0.2s ease;
-  letter-spacing: 1px;
+  transition: all 0.15s ease;
 }
 
 .settings-back-btn:hover {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  background: var(--accent-soft);
 }
 
 /* =============================================
-   Wizard — 开卷
+   Wizard
    ============================================= */
 
 .wizard-container {
@@ -615,10 +589,10 @@ html, body, #root {
   align-items: center;
   justify-content: center;
   padding: 32px 28px;
-  background: var(--paper);
-  border-radius: var(--radius-lg);
+  background: var(--bg);
+  border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: var(--shadow-paper);
+  box-shadow: var(--shadow-panel);
 }
 
 .wizard-step {
@@ -627,8 +601,8 @@ html, body, #root {
   align-items: center;
   text-align: center;
   width: 100%;
-  max-width: 340px;
-  animation: wizardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 320px;
+  animation: wizardIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes wizardIn {
@@ -642,51 +616,45 @@ html, body, #root {
   line-height: 1;
 }
 
-/* 朱砂印章 */
 .wizard-seal {
   width: 74px;
   height: 74px;
-  border-radius: 10px;
-  background: var(--cinnabar);
-  color: var(--paper);
-  font-family: var(--font-serif);
-  font-size: 40px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--accent), var(--accent-deep));
+  color: #fff;
+  font-size: 34px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 3px 12px var(--cinnabar-soft);
-  letter-spacing: 2px;
-  text-indent: 2px;
+  box-shadow: 0 8px 24px var(--accent-strong);
 }
 
 .wizard-step h2 {
-  font-family: var(--font-serif);
-  font-size: 23px;
-  font-weight: 600;
-  color: var(--ink);
-  letter-spacing: 3px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
   margin-bottom: 10px;
 }
 
 .wizard-step h3 {
-  font-family: var(--font-serif);
   font-size: 17px;
   font-weight: 600;
-  color: var(--ink);
-  letter-spacing: 2px;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
 .wizard-desc {
   font-size: 13.5px;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   margin-bottom: 4px;
   line-height: 1.7;
 }
 
 .wizard-sub {
   font-size: 12px;
-  color: var(--ink-faint);
+  color: var(--text-tertiary);
   margin-bottom: 22px;
 }
 
@@ -699,38 +667,37 @@ html, body, #root {
 .wizard-import-section h3 {
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   margin-bottom: 8px;
-  letter-spacing: 1px;
 }
 
 .wizard-dropzone {
   width: 100%;
   height: 180px;
-  border: 1.5px dashed var(--line-strong);
-  border-radius: var(--radius-md);
+  border: 1.5px dashed var(--separator-strong);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
   cursor: pointer;
-  transition: all 0.25s ease;
-  color: var(--ink-faint);
+  transition: all 0.2s ease;
+  color: var(--text-tertiary);
   font-size: 13px;
-  background: var(--paper-deep);
+  background: var(--bg-secondary);
   overflow: hidden;
 }
 
 .wizard-dropzone:hover {
-  border-color: var(--cinnabar);
-  background: var(--cinnabar-soft);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .wizard-dropzone.has-file {
-  border-color: var(--moss);
+  border-color: var(--green);
   border-style: solid;
-  background: var(--moss-soft);
+  background: rgba(52, 199, 89, 0.06);
 }
 
 .wizard-dropzone.small {
@@ -739,7 +706,7 @@ html, body, #root {
 
 .wizard-dropzone-icon {
   font-size: 30px;
-  color: var(--ink-faint);
+  color: var(--text-tertiary);
 }
 
 .wizard-preview {
@@ -758,23 +725,20 @@ html, body, #root {
 
 .wizard-btn {
   flex: 1;
-  padding: 11px 20px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ink-soft);
+  padding: 12px 20px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   font-size: 13.5px;
   font-weight: 500;
-  font-family: var(--font-sans);
+  font-family: var(--font);
   cursor: pointer;
-  transition: all 0.2s ease;
-  letter-spacing: 1px;
+  transition: all 0.15s ease;
 }
 
 .wizard-btn:hover:not(:disabled) {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  background: var(--bg-tertiary);
 }
 
 .wizard-btn:disabled {
@@ -783,16 +747,15 @@ html, body, #root {
 }
 
 .wizard-btn.primary {
-  background: var(--cinnabar);
-  color: var(--paper);
-  border: none;
+  background: var(--accent);
+  color: #fff;
   font-weight: 600;
 }
 
 .wizard-btn.primary:hover:not(:disabled) {
-  background: var(--cinnabar-deep);
+  background: var(--accent-deep);
   transform: translateY(-1px);
-  box-shadow: 0 3px 10px var(--cinnabar-soft);
+  box-shadow: 0 4px 14px var(--accent-strong);
 }
 
 .wizard-form {
@@ -804,44 +767,41 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
   text-align: left;
 }
 
 .wizard-form input {
-  padding: 10px 14px;
-  background: var(--paper-deep);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--ink);
+  padding: 11px 14px;
+  background: var(--bg-secondary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
   font-size: 13.5px;
-  font-family: var(--font-sans);
+  font-family: var(--font);
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .wizard-form input:focus {
-  border-color: var(--ink-soft);
-  box-shadow: 0 0 0 3px rgba(43, 42, 38, 0.06);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  background: var(--bg-tertiary);
 }
 
 .wizard-skip {
   margin-top: 14px;
   background: none;
   border: none;
-  color: var(--ink-faint);
+  color: var(--text-tertiary);
   font-size: 12.5px;
   cursor: pointer;
-  font-family: var(--font-sans);
-  transition: color 0.2s ease;
+  font-family: var(--font);
+  transition: color 0.15s ease;
   padding: 8px;
-  text-decoration: underline;
-  text-decoration-color: var(--line);
-  text-underline-offset: 4px;
 }
 
 .wizard-skip:hover {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
 }

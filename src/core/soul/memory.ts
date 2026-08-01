@@ -37,6 +37,20 @@ export function addMemory(
   const db = getDatabase()
   const id = uuidv4()
   const now = Date.now()
+
+  // Skip exact duplicates so high-frequency keywords don't bloat the table
+  const existing = db.prepare('SELECT id FROM memories WHERE content = ? LIMIT 1').get(content) as
+    | { id: string }
+    | undefined
+  if (existing) {
+    // Refresh the existing memory's timestamp & importance instead
+    db.prepare('UPDATE memories SET created_at = ?, importance = MAX(importance, ?) WHERE id = ?').run(
+      now, options.importance ?? 0.5, existing.id
+    )
+    const old = mapRow(db.prepare('SELECT * FROM memories WHERE id = ?').get(existing.id) as Record<string, unknown>)
+    return { ...old, content }
+  }
+
   db.prepare(`
     INSERT INTO memories (id, type, tier, content, importance,
       emotional_valence, emotional_intensity, created_at, tags,
@@ -66,7 +80,7 @@ export function addMemory(
     lastAccessedAt: null,
     createdAt: now,
     retentionScore: 1.0,
-    decayRate: 0.01,
+    decayRate: 0.08, // short-term memories fade after ~30 days unless promoted
     tags: options.tags ?? [],
     relatedMemoryIds: [],
     sourceConversationId: options.sourceConversationId ?? null
@@ -105,6 +119,28 @@ export function getMemoriesByTags(tags: string[], limit: number = 10): Memory[] 
     .map(mapRow)
 }
 
+/** Pick a notable long-term memory to naturally bring up, or null if none */
+export function getMemorableMemory(): Memory | null {
+  const db = getDatabase()
+  const rows = db
+    .prepare(
+      `SELECT * FROM memories
+       WHERE tier = 'long_term' AND importance >= 0.6 AND content != ''
+       ORDER BY RANDOM() LIMIT 3`
+    )
+    .all() as Record<string, unknown>[]
+  if (rows.length === 0) return null
+  return mapRow(rows[0])
+}
+
+/** Count how many things the pet remembers (for UI feedback) */
+export function countMemories(): { shortTerm: number; longTerm: number } {
+  const db = getDatabase()
+  const shortTerm = db.prepare("SELECT COUNT(*) as c FROM memories WHERE tier = 'short_term'").get() as { c: number }
+  const longTerm = db.prepare("SELECT COUNT(*) as c FROM memories WHERE tier = 'long_term'").get() as { c: number }
+  return { shortTerm: shortTerm.c, longTerm: longTerm.c }
+}
+
 export function consolidateMemories(): number {
   const db = getDatabase()
   const shortTerm = db
@@ -116,7 +152,7 @@ export function consolidateMemories(): number {
     const score = computeRetentionScore(mapRow(row))
     if (score > 0.5) {
       db.prepare(
-        `UPDATE memories SET tier = 'long_term', retention_score = ?, last_accessed_at = ? WHERE id = ?`
+        `UPDATE memories SET tier = 'long_term', retention_score = ?, last_accessed_at = ?, decay_rate = 0.01 WHERE id = ?`
       ).run(score, Date.now(), row.id as string)
       consolidated++
     }

@@ -23,6 +23,7 @@ const api = {
   setAutoLaunch: (enabled: boolean) => ipcRenderer.invoke('window:setAutoLaunch', enabled),
   getAutoLaunch: () => ipcRenderer.invoke('window:getAutoLaunch'),
   showPetMenu: () => ipcRenderer.invoke('window:showPetMenu'),
+  getStorageInfo: () => ipcRenderer.invoke('data:storageInfo'),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   toggleAlwaysOnTop: () => ipcRenderer.invoke('window:toggleAlwaysOnTop'),
 
@@ -121,11 +122,6 @@ const api = {
     const h = (_e: Electron.IpcRendererEvent, d: { mood: string }) => cb(d)
     ipcRenderer.on('pet:mood', h)
     return () => ipcRenderer.removeListener('pet:mood', h)
-  },
-  onPetSoul: (cb: (data: { energy: number; attachment: number }) => void) => {
-    const h = (_e: Electron.IpcRendererEvent, d: { energy: number; attachment: number }) => cb(d)
-    ipcRenderer.on('pet:soul', h)
-    return () => ipcRenderer.removeListener('pet:soul', h)
   },
   onPetUserReturned: (cb: () => void) => {
     const h = () => cb()

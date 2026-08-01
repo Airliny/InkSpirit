@@ -14,6 +14,7 @@ import { getConfig, setConfig } from './config'
 import { setSecureConfig, getSecureConfig } from './secureStore'
 import { uuidv4 } from './utils'
 import { recordUsage } from './cost/usage'
+import { tryEvolvePersonality } from './soul/personality'
 
 export class Agent {
   private aiClient: IAIClient | null = null
@@ -108,6 +109,18 @@ export class Agent {
     return { provider: 'ollama', model: this.localClient.config.model }
   }
 
+  /** Reset cached clients & history (e.g. after restoring a backup) */
+  resetClients(): void {
+    this.aiClient = null
+    this.localClient = null
+    this.conversationHistory = []
+    this.currentConversationId = null
+    this.currentProvider = (getConfig('provider') as AIProvider) || 'openai'
+    this.currentModel = getConfig(`${this.currentProvider}_model`) || ''
+    const savedLocal = getConfig('local_model')
+    if (savedLocal) this.configureLocalModel(savedLocal)
+  }
+
   private ensureClient(): IAIClient {
     if (!this.aiClient) {
       const provider = (getConfig('provider') as AIProvider) || 'openai'
@@ -144,7 +157,7 @@ export class Agent {
     const sentiment = analyzeSentiment(userMessage)
 
     if (isIgnoring() && sentiment.hostility > 0.3) {
-      return this.coldResponse(sentiment.hostility)
+      return this.coldResponse(sentiment.hostility, provider, model, userMessage)
     }
 
     if (isIgnoring() && sentiment.kindness > 0.5) {
@@ -170,6 +183,16 @@ export class Agent {
       forgiveEmotion(0.02)
     }
 
+    // How the user treats the pet slowly reshapes its personality:
+    // kindness breeds warmth, hostility breeds guardedness & humor as a shield
+    if (sentiment.kindness > 0.6) {
+      tryEvolvePersonality({ warmth: 0.75, gentleness: 0.7 })
+    } else if (sentiment.hostility > 0.5) {
+      tryEvolvePersonality({ gentleness: 0.3, humor: 0.65, warmth: 0.3 })
+    } else if (sentiment.hostility > 0.2) {
+      tryEvolvePersonality({ gentleness: 0.45 })
+    }
+
     const personality = getActivePersonality()
     const emotion = getCurrentEmotion()
     const relationship = getRelationship()
@@ -190,6 +213,9 @@ export class Agent {
     ]
 
     this.conversationHistory.push({ role: 'user', content: userMessage })
+    if (this.conversationHistory.length > 50) {
+      this.conversationHistory = this.conversationHistory.slice(-50)
+    }
 
     const stream = client.streamChat(messages)
 
@@ -201,6 +227,10 @@ export class Agent {
         yield chunk
       }
       self.conversationHistory.push({ role: 'assistant', content: fullResponse })
+      // Bound the in-memory history so long sessions don't leak memory
+      if (self.conversationHistory.length > 50) {
+        self.conversationHistory = self.conversationHistory.slice(-50)
+      }
       self.saveConversation()
       recordInteraction()
       recordUsage(provider, model, userMessage, fullResponse)
@@ -210,12 +240,19 @@ export class Agent {
     return wrappedStream()
   }
 
-  private async *coldResponse(hostility: number): AsyncGenerator<string, void, unknown> {
+  private async *coldResponse(hostility: number, provider: AIProvider, model: string, userMessage: string): AsyncGenerator<string, void, unknown> {
     const responses = hostility > 0.7
       ? ['（转过身去，不理你）', '（沉默）']
       : ['...', '（没有看你）', '嗯。']
     const msg = responses[Math.floor(Math.random() * responses.length)]
     this.conversationHistory.push({ role: 'assistant', content: msg })
+    if (this.conversationHistory.length > 50) {
+      this.conversationHistory = this.conversationHistory.slice(-50)
+    }
+    // Cold responses still count as interactions and are persisted
+    this.saveConversation()
+    recordInteraction()
+    recordUsage(provider, model, userMessage, msg)
     yield msg
   }
 

@@ -30,13 +30,13 @@ export default function App() {
   useEffect(() => {
     async function init() {
       try {
-        const hasModel = await window.inkAPI.hasModel()
-        if (!hasModel) {
-          const firstLaunch = await window.inkAPI.getConfig('first_launch')
-          if (firstLaunch !== 'false') {
-            await window.inkAPI.setPanelMode()
-            setMode('panel'); setScreen('wizard'); setLoading(false); return
-          }
+        const [hasModel, firstLaunch] = await Promise.all([
+          window.inkAPI.hasModel(),
+          window.inkAPI.getConfig('first_launch')
+        ])
+        if (!hasModel && firstLaunch !== 'false') {
+          await window.inkAPI.setPanelMode()
+          setMode('panel'); setScreen('wizard'); setLoading(false); return
         }
 
         const modelType = await window.inkAPI.getModelType()
@@ -123,7 +123,7 @@ export default function App() {
     setScreen('desktop'); window.inkAPI.setPetMode()
   }, [])
 
-  if (loading) return <div className="app-container" style={{ background: 'var(--paper)', borderRadius: 'var(--radius-lg)' }} />
+  if (loading) return <div className="app-container" style={{ background: 'var(--bg)', borderRadius: 'var(--radius-lg)' }} />
 
   if (screen === 'wizard') {
     return (

@@ -33,6 +33,7 @@ declare global {
       setAutoLaunch: (enabled: boolean) => Promise<boolean>
       getAutoLaunch: () => Promise<boolean>
       showPetMenu: () => Promise<void>
+      getStorageInfo: () => Promise<{ dbMB: number; avatarsMB: number; totalMB: number }>
 
       // Model
       importModel: (spriteKey: string) => Promise<{ success: boolean; path?: string; error?: string }>

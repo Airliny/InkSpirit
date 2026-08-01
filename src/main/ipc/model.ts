@@ -36,6 +36,7 @@ export function registerModelHandlers(agent: Agent): void {
   ipcMain.handle('model:mgrUse', (_event, model: string) => {
     // Set as the smart-router local model (does NOT override the cloud provider)
     agent.configureLocalModel(model)
+    setConfig('local_model_available', 'true')
     return { success: true, model }
   })
 }

@@ -171,10 +171,9 @@ export function tick(elapsedSeconds: number, userIdleMs: number = 0): BehaviorIm
   petState.impulse = impulse
   petState.lastImpulseTime = Date.now()
 
-  // Generate an inner thought occasionally
-  if (Math.random() < 0.15) {
-    petState.innerThought = generateInnerThought(emotion, impulse)
-  }
+  // Generate an inner thought occasionally; always clear it otherwise so a
+  // stale thought isn't re-emitted on every subsequent impulse
+  petState.innerThought = Math.random() < 0.15 ? generateInnerThought(emotion, impulse) : null
 
   return impulse
 }

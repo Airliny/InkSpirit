@@ -12,7 +12,7 @@ export function registerIpcHandlers(agent: Agent): void {
   registerChatHandlers(agent)
   registerConfigHandlers()
   registerSystemHandlers()
-  registerDataHandlers()
+  registerDataHandlers(agent)
   registerUpdateHandlers()
   registerModelHandlers(agent)
   registerCostHandlers()

@@ -35,14 +35,29 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [costSummary, setCostSummary] = useState<any>(null)
   const [autoLaunch, setAutoLaunch] = useState(false)
   const [dataMsg, setDataMsg] = useState('')
+  const [soulState, setSoulState] = useState<any>(null)
+  const [storageInfo, setStorageInfo] = useState<any>(null)
 
   useEffect(() => {
-    window.inkAPI.getConfig('provider').then(v => { if (v) setProvider(v) })
-    window.inkAPI.getSecureConfig('openai_api_key').then(v => { if (v) setApiKey(v) })
-    window.inkAPI.getConfig('openai_model').then(v => { if (v) setModel(v) })
-    window.inkAPI.getConfig('guardian_enabled').then(v => { if (v) setGuardianEnabled(v !== 'false') })
-    window.inkAPI.getConfig('guardian_work_threshold_min').then(v => { if (v) setGuardianThreshold(v) })
-    window.inkAPI.getConfig('guardian_cooldown_min').then(v => { if (v) setGuardianCooldown(v) })
+    const load = async () => {
+      const [provider, apiKey, model, gEnabled, gThreshold, gCooldown, auto] = await Promise.all([
+        window.inkAPI.getConfig('provider'),
+        window.inkAPI.getSecureConfig('openai_api_key'),
+        window.inkAPI.getConfig('openai_model'),
+        window.inkAPI.getConfig('guardian_enabled'),
+        window.inkAPI.getConfig('guardian_work_threshold_min'),
+        window.inkAPI.getConfig('guardian_cooldown_min'),
+        window.inkAPI.getAutoLaunch()
+      ])
+      if (provider) setProvider(provider)
+      if (apiKey) setApiKey(apiKey)
+      if (model) setModel(model)
+      if (gEnabled) setGuardianEnabled(gEnabled !== 'false')
+      if (gThreshold) setGuardianThreshold(gThreshold)
+      if (gCooldown) setGuardianCooldown(gCooldown)
+      if (auto !== null && auto !== undefined) setAutoLaunch(!!auto)
+    }
+    load()
 
     const u1 = window.inkAPI.onUpdateStatus((d) => {
       setUpdateState(d.state)
@@ -62,7 +77,8 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     })
     refreshOllama()
     refreshCost()
-    window.inkAPI.getAutoLaunch().then(setAutoLaunch)
+    window.inkAPI.getAgentState().then(setSoulState)
+    window.inkAPI.getStorageInfo().then(setStorageInfo)
     return () => { u1(); u2(); u3() }
   }, [])
 
@@ -90,8 +106,13 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
 
   async function handleImport() {
     const r = await window.inkAPI.importData()
-    setDataMsg(r.success ? '数据已恢复' : (r.error || '导入失败'))
-    setTimeout(() => setDataMsg(''), 3000)
+    if (r.success) {
+      // Data replaced — reload so every view picks up the restored state
+      window.location.reload()
+    } else {
+      setDataMsg(r.error || '导入失败')
+      setTimeout(() => setDataMsg(''), 3000)
+    }
   }
 
   async function refreshOllama() {
@@ -123,6 +144,17 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     }
   }
 
+  async function handleProviderChange(p: string) {
+    setProvider(p)
+    // Load the API key/model belonging to the newly selected provider
+    const [key, savedModel] = await Promise.all([
+      window.inkAPI.getSecureConfig(`${p}_api_key`),
+      window.inkAPI.getConfig(`${p}_model`)
+    ])
+    setApiKey(key || '')
+    setModel(savedModel || '')
+  }
+
   async function handleSaveAI() {
     await window.inkAPI.configureProvider(provider, apiKey, model || undefined)
     setSaved(true)
@@ -130,9 +162,14 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   }
 
   async function handleSaveGuardian() {
+    // Sanitize inputs so broken values can't cause non-stop reminders
+    const t = Math.max(15, Math.min(480, Number(guardianThreshold) || 45))
+    const c = Math.max(30, Math.min(480, Number(guardianCooldown) || 60))
+    setGuardianThreshold(String(t))
+    setGuardianCooldown(String(c))
     await window.inkAPI.setConfig('guardian_enabled', guardianEnabled ? 'true' : 'false')
-    await window.inkAPI.setConfig('guardian_work_threshold_min', guardianThreshold)
-    await window.inkAPI.setConfig('guardian_cooldown_min', guardianCooldown)
+    await window.inkAPI.setConfig('guardian_work_threshold_min', String(t))
+    await window.inkAPI.setConfig('guardian_cooldown_min', String(c))
     setGuardianSaved(true)
     setTimeout(() => setGuardianSaved(false), 2000)
   }
@@ -165,15 +202,69 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     happy: '开心', sad: '难过', love: '喜欢'
   }
 
+  const personalityLabels: [string, string][] = [
+    ['humor', '幽默'], ['gentleness', '温柔'], ['proactiveness', '主动'],
+    ['curiosity', '好奇'], ['professionalism', '认真'], ['expressiveness', '情感'],
+    ['warmth', '温暖'], ['formality', '正经']
+  ]
+
+  function stageLabel(s: string): string {
+    const map: Record<string, string> = {
+      stranger: '陌生人', acquaintance: '相识', friend: '朋友',
+      close_friend: '挚友', partner: '伴侣'
+    }
+    return map[s] ?? s
+  }
+
+  function emotionLabel(e: string): string {
+    const map: Record<string, string> = {
+      neutral: '平静', happy: '开心', excited: '兴奋', calm: '安宁', curious: '好奇',
+      focused: '专注', concerned: '担忧', tired: '疲惫', playful: '爱玩', thoughtful: '沉思',
+      sad: '难过', lonely: '孤独', upset: '低落', hurt: '受伤', jealous: '吃醋',
+      anxious: '不安', disappointed: '失望', shy: '害羞', proud: '得意', ignoring: '闹别扭'
+    }
+    return map[e] ?? e
+  }
+
   return (
     <div className="settings-view">
       <h3>设置</h3>
 
       <div className="settings-section">
+        <h4>灵魂状态</h4>
+        {soulState ? (
+          <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+            <div style={{ color: 'var(--text-secondary)' }}>
+              关系阶段：<span style={{ fontWeight: 600 }}>{stageLabel(soulState.relationshipStage)}</span>
+               ｜ 主导情绪：<span style={{ fontWeight: 600 }}>{emotionLabel(soulState.emotion?.dominantEmotion)}</span>
+            </div>
+            {soulState.memories && (
+              <div style={{ color: 'var(--text-tertiary)', marginTop: 2 }}>
+                记得 {soulState.memories.longTerm} 件重要的事，{soulState.memories.shortTerm} 件最近的事
+              </div>
+            )}
+            <div style={{ marginTop: 6 }}>
+              {personalityLabels.map(([key, label]) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <span style={{ width: 52, color: 'var(--text-tertiary)', flexShrink: 0 }}>{label}</span>
+                  <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'var(--bg)', border: '1px solid var(--separator)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.round((soulState.personality?.[key] ?? 0) * 100)}%`, background: 'var(--text-primary)', borderRadius: 3 }} />
+                  </div>
+                  <span style={{ width: 26, textAlign: 'right', color: 'var(--text-tertiary)' }}>{Math.round((soulState.personality?.[key] ?? 0) * 100)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>加载中...</div>
+        )}
+      </div>
+
+      <div className="settings-section">
         <h4>AI 配置</h4>
         <div className="settings-form">
           <label>Provider
-            <select value={provider} onChange={e => setProvider(e.target.value)}>
+            <select value={provider} onChange={e => handleProviderChange(e.target.value)}>
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="deepseek">DeepSeek</option>
@@ -195,12 +286,12 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
 
       <div className="settings-section">
         <h4>伙伴形象</h4>
-        <div style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.8, marginBottom: 12, background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 12, background: 'var(--bg)', border: '1px solid var(--separator)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>两种形象模式的能力差异</div>
           <div style={{ display: 'flex', gap: 16 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ color: 'var(--cinnabar)', fontWeight: 600, marginBottom: 2 }}>Live2D 模型</div>
-              <div style={{ color: 'var(--ink-faint)' }}>
+              <div style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: 2 }}>Live2D 模型</div>
+              <div style={{ color: 'var(--text-tertiary)' }}>
                 只需一个模型文件<br />
                 自带呼吸/眨眼等动画<br />
                 情绪切换动作需模型自带对应动作<br />
@@ -208,8 +299,8 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
               </div>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ color: 'var(--moss)', fontWeight: 600, marginBottom: 2 }}>精灵图</div>
-              <div style={{ color: 'var(--ink-faint)' }}>
+              <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 2 }}>精灵图</div>
+              <div style={{ color: 'var(--text-tertiary)' }}>
                 可逐动作导入 10 张图<br />
                 未导入的动作自动用默认图<br />
                 情绪/行为会切换对应图片<br />
@@ -226,7 +317,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
                 await window.inkAPI.setConfig('model_type', 'sprites')
                 onModelSourceChange({ type: 'sprites', sprites: {} })
               }}
-              style={{ color: 'var(--ochre)' }}
+              style={{ color: 'var(--orange)' }}
             >
               切换为精灵图模式
             </button>
@@ -253,26 +344,26 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
 
       <div className="settings-section">
         <h4>本地模型 (Ollama)</h4>
-        {ollamaRunning === null && <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>检测 Ollama 环境...</div>}
+        {ollamaRunning === null && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>检测 Ollama 环境...</div>}
         {ollamaRunning === false && (
-          <div style={{ fontSize: 13, color: 'var(--ochre)' }}>
-            未检测到 Ollama。请先安装并启动 Ollama：<a href="https://ollama.com/download" target="_blank" style={{ color: 'var(--cinnabar)' }}>ollama.com/download</a>
+          <div style={{ fontSize: 13, color: 'var(--orange)' }}>
+            未检测到 Ollama。请先安装并启动 Ollama：<a href="https://ollama.com/download" target="_blank" style={{ color: 'var(--accent)' }}>ollama.com/download</a>
           </div>
         )}
         {ollamaRunning === true && (
           <>
-            <div style={{ fontSize: 13, color: 'var(--moss)', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: 'var(--green)', marginBottom: 10 }}>
               Ollama v{ollamaVersion} 运行中
             </div>
             {hardware && (
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
                 你的设备：{hardware.gpuName || '未知显卡'} ｜ 显存 {hardware.vramGB !== null ? `${hardware.vramGB}GB` : '核显/共享'} ｜ 内存 {hardware.totalRamGB}GB
               </div>
             )}
             <div className="settings-form">
               {installedModels.length > 0 && (
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 6 }}>已安装模型</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>已安装模型</div>
                   {installedModels.map(m => (
                     <div key={m.name} className="settings-sprite-row">
                       <span style={{ flex: 1 }}>{m.name}</span>
@@ -284,15 +375,15 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
                 </div>
               )}
               {installedModels.length === 0 && (
-                <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 }}>还没有本地模型</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>还没有本地模型</div>
               )}
-              <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 6 }}>可用模型（点击下载前请确认你的显卡满足最低要求）</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>可用模型（点击下载前请确认你的显卡满足最低要求）</div>
               {catalog.map(m => (
                 <div key={m.tag} className="settings-sprite-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
                   <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10 }}>
                     <span style={{ flex: 1, fontWeight: 500 }}>
-                      {m.name} <span style={{ color: 'var(--ink-faint)' }}>({m.parameterSize})</span>
-                      {m.recommended && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--paper)', background: 'var(--moss)', borderRadius: 3, padding: '1px 6px', letterSpacing: 1 }}>推荐</span>}
+                      {m.name} <span style={{ color: 'var(--text-tertiary)' }}>({m.parameterSize})</span>
+                      {m.recommended && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--bg)', background: 'var(--green)', borderRadius: 3, padding: '1px 6px', letterSpacing: 1 }}>推荐</span>}
                     </span>
                     <span className="settings-sprite-status">{m.size}</span>
                     {m.installed ? (
@@ -306,27 +397,27 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
                         下载
                       </button>
                     ) : (
-                      <span style={{ fontSize: 11, color: 'var(--cinnabar)' }}>禁止安装</span>
+                      <span style={{ fontSize: 11, color: 'var(--accent)' }}>禁止安装</span>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
                     {m.description} ｜ 需显存 ≥{m.minVramGB}GB / 内存 ≥{m.minRamGB}GB
                   </div>
                   {!m.feasible && (
-                    <div style={{ fontSize: 11, color: 'var(--cinnabar)' }}>{m.reason}</div>
+                    <div style={{ fontSize: 11, color: 'var(--accent)' }}>{m.reason}</div>
                   )}
                   {pullingModel === m.tag && (
                     <div style={{ width: '100%' }}>
-                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 2 }}>下载中... {pullProgress}%</div>
-                      <div style={{ height: 4, borderRadius: 2, background: 'var(--paper)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${pullProgress}%`, background: 'var(--cinnabar)', transition: 'width 0.3s' }} />
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>下载中... {pullProgress}%</div>
+                      <div style={{ height: 4, borderRadius: 2, background: 'var(--bg)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pullProgress}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
                       </div>
                     </div>
                   )}
                 </div>
               ))}
               {pullError && (
-                <div style={{ fontSize: 12, color: 'var(--cinnabar)', marginTop: 8 }}>{pullError}</div>
+                <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 8 }}>{pullError}</div>
               )}
             </div>
           </>
@@ -385,7 +476,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
             />
           </label>
           {routerEnabled && (
-            <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
               {routerLocalModel
                 ? `本地模型：${routerLocalModel}（简短闲聊自动走本地，复杂问题走云端）`
                 : '未选择本地模型，请到"本地模型"区块选择"使用"'}
@@ -396,17 +487,24 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           </label>
           <button className="settings-save-btn" onClick={handleSaveBudget}>保存预算</button>
           {costSummary && (
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
               <div>本月（{costSummary.month}）用量：{costSummary.totalTokens.toLocaleString()} tokens</div>
               <div>费用：${costSummary.totalCostUsd.toFixed(3)} / 预算 ${costSummary.budgetUsd}</div>
               {costSummary.budgetExceeded && (
-                <div style={{ color: 'var(--cinnabar)' }}>预算已用完，云端请求将被拦截</div>
+                <div style={{ color: 'var(--accent)' }}>预算已用完，云端请求将被拦截</div>
               )}
               {Object.entries(costSummary.entries).map(([p, e]: any) => (
-                <div key={p} style={{ color: 'var(--ink-faint)' }}>
+                <div key={p} style={{ color: 'var(--text-tertiary)' }}>
                   {p}: {e.requests} 次 / ${e.costUsd.toFixed(3)}
                 </div>
               ))}
+              <button
+                className="settings-sprite-btn"
+                style={{ marginTop: 6 }}
+                onClick={async () => { await window.inkAPI.clearResponseCache() }}
+              >
+                清空响应缓存
+              </button>
             </div>
           )}
         </div>
@@ -419,10 +517,18 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleExport}>备份数据</button>
           <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleImport}>恢复数据</button>
         </div>
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+          备份 = 选择保存文件夹（含记忆/情绪/形象文件）；恢复 = 选择备份文件夹（兼容旧版 .inkdata 文件）
+        </div>
+        {storageInfo && (
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+            本地占用：数据库 {storageInfo.dbMB}MB ｜ 形象文件 {storageInfo.avatarsMB}MB ｜ 合计 {storageInfo.totalMB}MB
+          </div>
+        )}
         <div style={{ marginTop: 8 }}>
           <button
             className="settings-sprite-btn"
-            style={{ color: 'var(--cinnabar)' }}
+            style={{ color: 'var(--accent)' }}
             onClick={async () => {
               await window.inkAPI.clearChatHistory()
               window.location.reload()
@@ -431,7 +537,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
             清空聊天记录
           </button>
         </div>
-        {dataMsg && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>{dataMsg}</div>}
+        {dataMsg && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>{dataMsg}</div>}
       </div>
 
 
@@ -453,7 +559,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           </button>
           {updateState === 'available' && (
             <>
-              <div style={{ fontSize: 13, color: 'var(--moss)' }}>发现新版本 {updateVersion}</div>
+              <div style={{ fontSize: 13, color: 'var(--green)' }}>发现新版本 {updateVersion}</div>
               <button
                 className="settings-save-btn"
                 onClick={() => { window.inkAPI.downloadUpdate() }}
@@ -464,17 +570,17 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           )}
           {updateState === 'downloading' && (
             <>
-              <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                 下载中... {updatePercent}%
               </div>
-              <div style={{ height: 4, borderRadius: 2, background: 'var(--paper)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${updatePercent}%`, background: 'var(--cinnabar)', transition: 'width 0.3s' }} />
+              <div style={{ height: 4, borderRadius: 2, background: 'var(--bg)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${updatePercent}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
               </div>
             </>
           )}
           {updateState === 'downloaded' && (
             <>
-              <div style={{ fontSize: 13, color: 'var(--moss)' }}>更新已就绪</div>
+              <div style={{ fontSize: 13, color: 'var(--green)' }}>更新已就绪</div>
               <button
                 className="settings-save-btn"
                 onClick={() => { window.inkAPI.installUpdate() }}
@@ -484,10 +590,10 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
             </>
           )}
           {updateState === 'not-available' && (
-            <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>当前已是最新版本</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>当前已是最新版本</div>
           )}
           {updateState === 'error' && (
-            <div style={{ fontSize: 13, color: 'var(--cinnabar)' }}>检查更新失败：{updateMessage}</div>
+            <div style={{ fontSize: 13, color: 'var(--accent)' }}>检查更新失败：{updateMessage}</div>
           )}
         </div>
       </div>

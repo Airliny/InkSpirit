@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Application, type IDestroyOptions } from 'pixi.js'
+import type { Application as PixiApplication } from 'pixi.js'
 import type { AnimationState } from './modelTypes'
 
-let appInstance: Application | null = null
+let appInstance: PixiApplication | null = null
 let appRefCount = 0
 
 const MOTION_MAP: Record<string, string> = {
@@ -10,11 +10,13 @@ const MOTION_MAP: Record<string, string> = {
   yawn: 'yawn', surprised: 'surprised', happy: 'happy', sad: 'sad', love: 'love', blink: 'idle'
 }
 
-function getSharedApp(canvas: HTMLCanvasElement, width: number, height: number): Application {
+async function getSharedApp(canvas: HTMLCanvasElement, width: number, height: number): Promise<PixiApplication> {
   if (appInstance) {
     appRefCount++
     return appInstance
   }
+  // Dynamic import: pixi.js (~1MB) is only loaded when a Live2D model is used
+  const { Application } = await import('pixi.js')
   const app = new Application({
     view: canvas,
     width,
@@ -68,11 +70,12 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
     if (!canvasRef.current || !modelPath) return
 
     let destroyed = false
+    setError(null)
 
     async function load() {
       try {
         const { Live2DModel } = await import('pixi-live2d-display')
-        const app = getSharedApp(canvasRef.current!, width, height)
+        const app = await getSharedApp(canvasRef.current!, width, height)
 
         const model = await Live2DModel.from(modelPath)
         if (destroyed) { releaseSharedApp(); return }
@@ -139,7 +142,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
           width: Math.min(72, width * 0.6),
           height: Math.min(72, height * 0.6),
           borderRadius: '50%',
-          background: 'var(--ink)',
+          background: 'var(--accent)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -147,9 +150,9 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          boxShadow: '0 2px 10px rgba(43,42,38,0.2)'
+          boxShadow: '0 4px 16px var(--accent-strong)'
         }}>
-          <span style={{ fontFamily: 'var(--font-serif)', fontSize: Math.min(24, width * 0.22), color: 'var(--paper)', opacity: 0.85 }}>
+          <span style={{ fontSize: Math.min(24, width * 0.22), color: '#fff', fontWeight: 700, opacity: 0.95 }}>
             砚
           </span>
         </div>
@@ -160,7 +163,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
           bottom: 2,
           width: '100%',
           fontSize: 9,
-          color: 'var(--cinnabar)',
+          color: 'var(--red)',
           textAlign: 'center',
           pointerEvents: 'none'
         }}>

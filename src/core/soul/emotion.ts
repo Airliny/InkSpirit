@@ -67,14 +67,41 @@ export const DEFAULT_EMOTION: EmotionState = {
   timestamp: Date.now()
 }
 
+let memoryEmotion: EmotionState | null = null
+let lastSnapshotWrite = 0
+const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000
+
+/** Reset in-memory emotion (e.g. after importing a backup) */
+export function clearEmotionCache(): void {
+  memoryEmotion = null
+  lastSnapshotWrite = 0
+}
+
+/** Persist the in-memory emotion immediately (e.g. on app quit) */
+export function flushEmotion(): void {
+  if (!memoryEmotion) return
+  lastSnapshotWrite = 0
+  const db = getDatabase()
+  db.prepare(
+    'INSERT INTO emotion_snapshots (id, state_json, timestamp) VALUES (?, ?, ?)'
+  ).run(uuidv4(), JSON.stringify(memoryEmotion), Date.now())
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  db.prepare('DELETE FROM emotion_snapshots WHERE timestamp < ?').run(cutoff)
+}
+
 export function getCurrentEmotion(): EmotionState {
+  if (memoryEmotion) return memoryEmotion
   const db = getDatabase()
   const row = db
     .prepare('SELECT state_json FROM emotion_snapshots ORDER BY timestamp DESC LIMIT 1')
     .get() as { state_json: string } | undefined
-  if (!row) return { ...DEFAULT_EMOTION }
+  if (!row) {
+    memoryEmotion = { ...DEFAULT_EMOTION }
+    return memoryEmotion
+  }
   const parsed = JSON.parse(row.state_json) as Partial<EmotionState>
-  return { ...DEFAULT_EMOTION, ...parsed }
+  memoryEmotion = { ...DEFAULT_EMOTION, ...parsed }
+  return memoryEmotion
 }
 
 export function updateEmotion(delta: Partial<EmotionState>): EmotionState {
@@ -212,9 +239,16 @@ export function applyEmotionDecay(): EmotionState {
   const elapsed = (Date.now() - current.timestamp) / 1000 / 60
   const decay = current.decayRate * elapsed
 
+  // Baseline drift: prolonged happiness slowly raises the emotional baseline,
+  // so a genuinely happy pet stays happier — personality changes over weeks
+  const baselineHappiness = clamp(
+    current.baselineHappiness + (current.happiness - current.baselineHappiness) * 0.0008,
+    0.2, 0.9
+  )
+
   const updated: EmotionState = {
     ...current,
-    happiness: Math.max(0, (current.happiness - decay * 0.3) * 0.7 + current.baselineHappiness * 0.3),
+    happiness: Math.max(0, (current.happiness - decay * 0.3) * 0.7 + baselineHappiness * 0.3),
     sadness: Math.max(0, current.sadness - decay * 0.08),
     jealousy: Math.max(0, current.jealousy - decay * 0.04),
     anxiety: Math.max(0, current.anxiety - decay * 0.06),
@@ -222,6 +256,7 @@ export function applyEmotionDecay(): EmotionState {
     grudge: Math.max(0, current.grudge - 0.0003 * elapsed),
     energy: Math.max(0, current.energy - decay * 0.2),
     arousal: Math.max(0, current.arousal - decay * 0.15),
+    baselineHappiness,
     timestamp: Date.now()
   }
 
@@ -260,6 +295,13 @@ function recomputeDominant(state: EmotionState): void {
 }
 
 function saveEmotionSnapshot(state: EmotionState): void {
+  // Keep the live state in memory; persist to DB throttled so the many
+  // small emotion changes don't hammer SQLite every tick.
+  memoryEmotion = state
+  const now = Date.now()
+  if (now - lastSnapshotWrite < SNAPSHOT_INTERVAL_MS) return
+  lastSnapshotWrite = now
+
   const db = getDatabase()
   db.prepare(
     'INSERT INTO emotion_snapshots (id, state_json, timestamp) VALUES (?, ?, ?)'
@@ -267,6 +309,10 @@ function saveEmotionSnapshot(state: EmotionState): void {
   // Keep the table bounded: retain 7 days of history, then prune older rows
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
   db.prepare('DELETE FROM emotion_snapshots WHERE timestamp < ?').run(cutoff)
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
 }
 
 export function emotionToExpression(emotion: EmotionType): string {

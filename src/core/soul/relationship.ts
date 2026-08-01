@@ -18,7 +18,19 @@ export interface Relationship {
   lastInteractionAt: number | null
 }
 
+let cached: { at: number; rel: Relationship } | null = null
+const CACHE_TTL_MS = 5000
+
+/** Reset in-memory relationship (e.g. after importing a backup) */
+export function clearRelationshipCache(): void {
+  cached = null
+}
+
 export function getRelationship(userId: string = 'default'): Relationship {
+  if (cached && cached.rel.userId === userId && Date.now() - cached.at < CACHE_TTL_MS) {
+    return cached.rel
+  }
+
   const db = getDatabase()
   const row = db.prepare('SELECT * FROM relationships WHERE user_id = ?').get(userId) as
     | Record<string, unknown>
@@ -36,7 +48,7 @@ export function getRelationship(userId: string = 'default'): Relationship {
       lastInteractionAt: now
     }
   }
-  return {
+  const rel: Relationship = {
     userId: row.user_id as string,
     trust: row.trust as number,
     familiarity: row.familiarity as number,
@@ -46,9 +58,12 @@ export function getRelationship(userId: string = 'default'): Relationship {
     firstInteractionAt: row.first_interaction_at as number | null,
     lastInteractionAt: row.last_interaction_at as number | null
   }
+  cached = { at: Date.now(), rel }
+  return rel
 }
 
 export function recordInteraction(userId: string = 'default'): Relationship {
+  cached = null // invalidate before reading fresh state
   const db = getDatabase()
   const rel = getRelationship(userId)
 
