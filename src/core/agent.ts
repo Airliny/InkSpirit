@@ -265,9 +265,11 @@ export class Agent {
       self.saveConversation()
       recordInteraction()
       recordUsage(provider, model, userMessage, fullResponse)
-      // Semantic review of the reply: skip terse replies, prefer local model
+      // Semantic review of the reply: prefer local model; short replies are
+      // sampled randomly (~20%) instead of always checked, to save tokens
       const reviewDetector = self.localClient ?? client
-      const unsafeOut = fullResponse.trim().length <= 20
+      const isShort = fullResponse.trim().length <= 20
+      const unsafeOut = isShort && Math.random() >= 0.2
         ? 'none' as const
         : await detectUnsafe(reviewDetector, fullResponse)
       if (unsafeOut === 'none') {
