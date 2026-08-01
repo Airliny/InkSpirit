@@ -117,8 +117,104 @@ const migrations: Migration[] = [
           );
       `)
     }
+  },
+  {
+    version: 3,
+    name: 'daily_patterns',
+    up: (db) => {
+      // User-rhythm model: aggregate active minutes per hour-bucket only.
+      // No window titles, no app history, no behavior traces.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS daily_patterns (
+          date TEXT NOT NULL,
+          hour_bucket INTEGER NOT NULL,
+          active_minutes REAL NOT NULL DEFAULT 0,
+          PRIMARY KEY (date, hour_bucket)
+        );
+      `)
+    }
+  },
+  {
+    version: 4,
+    name: 'relationship_v2',
+    up: (db) => {
+      // Relationship vector v2: three new dimensions.
+      // Existing users get intimacy seeded from affection (smooth migration).
+      // Column guards make this migration re-runnable after an interrupted run.
+      if (!hasColumn(db, 'relationships', 'intimacy')) {
+        db.exec('ALTER TABLE relationships ADD COLUMN intimacy REAL NOT NULL DEFAULT 0.05')
+      }
+      if (!hasColumn(db, 'relationships', 'dependency')) {
+        db.exec('ALTER TABLE relationships ADD COLUMN dependency REAL NOT NULL DEFAULT 0.05')
+      }
+      if (!hasColumn(db, 'relationships', 'understanding')) {
+        db.exec('ALTER TABLE relationships ADD COLUMN understanding REAL NOT NULL DEFAULT 0.1')
+      }
+      db.exec('UPDATE relationships SET intimacy = MAX(intimacy, MIN(1, affection * 0.5))')
+    }
+  },
+  {
+    version: 5,
+    name: 'event_sourcing_logs',
+    up: (db) => {
+      // Life interpretability: every soul change must answer "why".
+      // Personality evolution log — one row per trait change per evolution.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS personality_evolution_log (
+          id TEXT PRIMARY KEY,
+          personality_version INTEGER NOT NULL,
+          trait TEXT NOT NULL,
+          before_value REAL NOT NULL,
+          after_value REAL NOT NULL,
+          delta REAL NOT NULL,
+          reason TEXT,
+          source TEXT,
+          created_at INTEGER NOT NULL
+        );
+      `)
+      // Relationship change log — every event replayable with before/after.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS relationship_change_log (
+          id TEXT PRIMARY KEY,
+          event_type TEXT NOT NULL,
+          intensity REAL NOT NULL,
+          event_source TEXT NOT NULL,
+          metadata TEXT,
+          before_json TEXT NOT NULL,
+          after_json TEXT NOT NULL,
+          affected_json TEXT NOT NULL,
+          weights_version INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL
+        );
+      `)
+    }
+  },
+  {
+    version: 6,
+    name: 'identity_events',
+    up: (db) => {
+      // Identity events are USER behavior events, never pet growth tasks:
+      // the pet never asks for a name, never reminds, never schedules naming.
+      // source is always 'user' — identity changes only happen when the
+      // user initiates them.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS identity_events (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'user',
+          name TEXT,
+          metadata TEXT,
+          created_at INTEGER NOT NULL
+        );
+      `)
+    }
   }
 ]
+
+function hasColumn(db: Database.Database, table: string, column: string): boolean {
+  const row = db.prepare('SELECT COUNT(*) as c FROM pragma_table_info(?) WHERE name = ?').get(table, column) as { c: number }
+  return row.c > 0
+}
 
 export function runMigrations(db: Database.Database): void {
   db.exec(`
@@ -136,11 +232,16 @@ export function runMigrations(db: Database.Database): void {
 
   for (const migration of migrations) {
     if (migration.version > currentVersion) {
-      migration.up(db)
-      db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
-        migration.version,
-        Date.now()
-      )
+      // Migration + version record commit atomically: an interrupted run
+      // rolls back and re-runs cleanly on the next launch.
+      const apply = db.transaction(() => {
+        migration.up(db)
+        db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
+          migration.version,
+          Date.now()
+        )
+      })
+      apply()
     }
   }
 }

@@ -30,21 +30,34 @@ export function registerChatHandlers(agent: Agent): void {
       }
 
       // Cache: identical message within 10 minutes returns the cached reply
-      // (key includes current emotion so mood-affected replies differ)
+      // (key includes current emotion so mood-affected replies differ).
+      // M1: the CACHE only caches the LLM text — the soul pipeline always
+      // runs first, so a repeated message still changes emotion/relationship/
+      // memory. We cache the answer, never the experience.
       const clientInfo = route === 'local' ? agent.getLocalClientInfo() : agent.getActiveClientInfo()
       if (clientInfo) {
         const mood = emotionToExpression(getCurrentEmotion().dominantEmotion)
         const key = cacheKey(clientInfo.provider, clientInfo.model, `${mood}|${message}`)
         const cached = getCachedReply(key)
         if (cached !== null) {
-          // Cache hits bypass the agent — re-check safety so a cached reply
-          // can't be served to a violating request
-          const unsafe = await agent.checkUnsafe(message)
-          if (unsafe) {
-            return { success: false, error: '这个话题我不能聊。' }
+          // Full soul experience first (safety / emotion / relationship /
+          // personality / memory feedback all apply — same path as normal chat)
+          const pipe = await agent.runPipeline(message)
+          if (pipe.kind !== 'ok') {
+            // Naming/refusal/cold are rare and short — let the agent handle
+            // them fresh (they never benefit from the cache anyway)
+            const stream = await agent.chat(message)
+            for await (const chunk of stream) {
+              if (win.isDestroyed()) break
+              win.webContents.send('agent:chat-chunk', chunk)
+            }
+            if (!win.isDestroyed()) win.webContents.send('agent:chat-done')
+            return { success: true, cached: false }
           }
           win.webContents.send('agent:chat-chunk', cached)
           win.webContents.send('agent:chat-done')
+          // The exchange still "happens": persisted to history + usage ledger
+          agent.recordExchange(message, cached, clientInfo.provider, clientInfo.model)
           return { success: true, cached: true }
         }
       }

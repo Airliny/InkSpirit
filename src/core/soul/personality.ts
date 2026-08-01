@@ -1,4 +1,5 @@
 import { getDatabase } from '../database'
+import { uuidv4 } from '../utils'
 
 export interface PersonalityTraits {
   humor: number
@@ -33,6 +34,49 @@ export const DEFAULT_TRAITS: PersonalityTraits = {
 const EVOLVE_RATE = 0.015
 const EVOLVE_COOLDOWN_HOURS = 6
 const MIN_TRAIT_DELTA = 0.005
+
+/** One per-trait change row — the "why" of a personality evolution */
+export interface PersonalityEvolutionEntry {
+  personalityVersion: number
+  trait: keyof PersonalityTraits
+  before: number
+  after: number
+  delta: number
+  reason: string | null
+  source: string | null
+  timestamp: number
+}
+
+/** Pure: compute log entries from a before/after trait snapshot */
+export function computeEvolutionLogEntries(
+  before: PersonalityTraits,
+  after: PersonalityTraits,
+  version: number,
+  reason: string | null,
+  source: string | null,
+  timestamp: number = Date.now()
+): PersonalityEvolutionEntry[] {
+  const entries: PersonalityEvolutionEntry[] = []
+  for (const trait of Object.keys(after) as (keyof PersonalityTraits)[]) {
+    const diff = Math.abs(after[trait] - before[trait])
+    if (diff < MIN_TRAIT_DELTA) continue
+    entries.push({
+      personalityVersion: version,
+      trait,
+      before: before[trait],
+      after: after[trait],
+      delta: round2(after[trait] - before[trait]),
+      reason,
+      source,
+      timestamp
+    })
+  }
+  return entries
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
 
 let cachedPersonality: { at: number; p: Personality } | null = null
 const PERSONALITY_TTL_MS = 5000
@@ -87,7 +131,11 @@ export function evolvePersonality(
   return evolved
 }
 
-export function tryEvolvePersonality(adjustments: Partial<PersonalityTraits>): boolean {
+export function tryEvolvePersonality(
+  adjustments: Partial<PersonalityTraits>,
+  reason: string | null = null,
+  source: string | null = null
+): boolean {
   const current = getActivePersonality()
   const hoursSinceLast = (Date.now() - current.createdAt) / (1000 * 60 * 60)
 
@@ -101,7 +149,13 @@ export function tryEvolvePersonality(adjustments: Partial<PersonalityTraits>): b
     return false
   }
 
-  savePersonality(evolved)
+  const nextVersion = current.version + 1
+  savePersonality(evolved, nextVersion)
+  // Event-sourced: every change answers "why"
+  const entries = computeEvolutionLogEntries(current.traits, evolved, nextVersion, reason, source)
+  for (const entry of entries) {
+    saveEvolutionLogEntry(entry)
+  }
   return true
 }
 
@@ -115,16 +169,56 @@ function maxTraitDelta(a: PersonalityTraits, b: PersonalityTraits): number {
   return max
 }
 
-export function savePersonality(traits: PersonalityTraits): void {
+export function savePersonality(traits: PersonalityTraits, versionOverride?: number): void {
   cachedPersonality = null // invalidate before writing
   const db = getDatabase()
   const current = getActivePersonality()
+  const nextVersion = versionOverride ?? current.version + 1
   db.prepare('UPDATE personalities SET is_active = 0 WHERE is_active = 1').run()
-  const id = `personality_v${current.version + 1}_${Date.now()}`
+  const id = `personality_v${nextVersion}_${Date.now()}`
   db.prepare(
     'INSERT INTO personalities (id, version, is_active, traits_json, created_at) VALUES (?, ?, 1, ?, ?)'
-  ).run(id, current.version + 1, JSON.stringify(traits), Date.now())
+  ).run(id, nextVersion, JSON.stringify(traits), Date.now())
   cachedPersonality = null
+}
+
+function saveEvolutionLogEntry(entry: PersonalityEvolutionEntry): void {
+  const db = getDatabase()
+  db.prepare(`
+    INSERT INTO personality_evolution_log
+    (id, personality_version, trait, before_value, after_value, delta, reason, source, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    uuidv4(),
+    entry.personalityVersion,
+    entry.trait,
+    entry.before,
+    entry.after,
+    entry.delta,
+    entry.reason,
+    entry.source,
+    entry.timestamp
+  )
+}
+
+/** Query the evolution history of a trait (or all) — "why is 砚灵 so gentle" */
+export function getPersonalityEvolutionHistory(trait?: keyof PersonalityTraits, limit = 50): PersonalityEvolutionEntry[] {
+  const db = getDatabase()
+  const rows = (trait
+    ? db.prepare(
+        'SELECT * FROM personality_evolution_log WHERE trait = ? ORDER BY created_at DESC LIMIT ?'
+      ).all(trait, limit)
+    : db.prepare('SELECT * FROM personality_evolution_log ORDER BY created_at DESC LIMIT ?').all(limit)) as Record<string, unknown>[]
+  return rows.map((row) => ({
+    personalityVersion: row.personality_version as number,
+    trait: row.trait as keyof PersonalityTraits,
+    before: row.before_value as number,
+    after: row.after_value as number,
+    delta: row.delta as number,
+    reason: row.reason as string | null,
+    source: row.source as string | null,
+    timestamp: row.created_at as number
+  }))
 }
 
 export type ReminderTone = 'gentle' | 'playful' | 'direct'

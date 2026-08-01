@@ -39,3 +39,9 @@ export function getTotalWorkMinutes(): number {
   return Math.floor(getSession().totalActiveMs / 60000)
 }
 
+/** Minutes of the current continuous active streak (0 when idle) */
+export function getCurrentStreakMin(): number {
+  if (!currentStreakStart) return 0
+  return (Date.now() - currentStreakStart) / 60000
+}
+

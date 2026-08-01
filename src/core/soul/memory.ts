@@ -23,10 +23,19 @@ export interface Memory {
   sourceConversationId: string | null
 }
 
+/** Producer-side effect: mark a memory as successfully recalled */
+export function recordMemoryRecall(memoryId: string): void {
+  const db = getDatabase()
+  db.prepare(
+    'UPDATE memories SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?'
+  ).run(Date.now(), memoryId)
+}
+
 export function addMemory(
   content: string,
   options: {
     type?: MemoryType
+    tier?: MemoryTier
     importance?: number
     emotionalValence?: number
     emotionalIntensity?: number
@@ -51,14 +60,16 @@ export function addMemory(
     return { ...old, content }
   }
 
+  const tier = options.tier ?? 'short_term'
   db.prepare(`
     INSERT INTO memories (id, type, tier, content, importance,
       emotional_valence, emotional_intensity, created_at, tags,
       source_conversation_id)
-    VALUES (?, ?, 'short_term', ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     options.type ?? 'episodic',
+    tier,
     content,
     options.importance ?? 0.5,
     options.emotionalValence ?? 0,
@@ -70,7 +81,7 @@ export function addMemory(
   return {
     id,
     type: options.type ?? 'episodic',
-    tier: 'short_term',
+    tier,
     content,
     summary: null,
     importance: options.importance ?? 0.5,
@@ -80,7 +91,7 @@ export function addMemory(
     lastAccessedAt: null,
     createdAt: now,
     retentionScore: 1.0,
-    decayRate: 0.08, // short-term memories fade after ~30 days unless promoted
+    decayRate: tier === 'long_term' ? 0.01 : 0.08, // short-term memories fade after ~30 days unless promoted
     tags: options.tags ?? [],
     relatedMemoryIds: [],
     sourceConversationId: options.sourceConversationId ?? null

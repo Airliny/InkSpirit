@@ -21,19 +21,29 @@ interface PetViewProps {
   modelSource: ModelSource
   expression?: AvatarExpression
   mood?: string
+  /** M3: conversation body state — suspends autonomous motion while in dialogue */
+  activity?: string
   onClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
 }
 
-export const PetView = memo(function PetView({ modelSource, expression, mood, onClick, onContextMenu }: PetViewProps) {
+export const PetView = memo(function PetView({ modelSource, expression, mood, activity = 'idle', onClick, onContextMenu }: PetViewProps) {
   const [bubbles, setBubbles] = useState<Bubble[]>([])
   const [currentState, setCurrentState] = useState<AnimationState>('idle')
   const [override, setOverride] = useState<AnimationState | null>(null)
+  const [live2dFailed, setLive2dFailed] = useState(false)
   const walkRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const overrideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bubbleTimers = useRef<ReturnType<typeof setTimeout>[]>([])
   const dragging = useRef(false)
   const startPos = useRef({ x: 0, y: 0 })
+
+  // If Live2D is unavailable (missing core runtime / bad model), fall back to
+  // the builtin avatar — never leave the pet invisible
+  const useLive2d = modelSource.type === 'live2d' && !live2dFailed
+  useEffect(() => {
+    if (modelSource.type !== 'live2d') setLive2dFailed(false)
+  }, [modelSource])
 
   // Emotional expression overrides behavior briefly, then fades back
   useEffect(() => {
@@ -64,7 +74,10 @@ export const PetView = memo(function PetView({ modelSource, expression, mood, on
   const displayState = override ?? currentState
 
   useEffect(() => {
-    if (currentState === 'walk') {
+    // M3: while a conversation is in flight the pet stops its random wandering —
+    // attention is on the user. Only wander when fully idle.
+    const conversational = activity !== 'idle'
+    if (currentState === 'walk' && !conversational) {
       walkRef.current = setInterval(() => {
         if (dragging.current) return
         window.inkAPI.moveWindowBy(Math.round((Math.random() - 0.5) * 14), Math.round((Math.random() - 0.5) * 6))
@@ -73,7 +86,7 @@ export const PetView = memo(function PetView({ modelSource, expression, mood, on
       if (walkRef.current) { clearInterval(walkRef.current); walkRef.current = null }
     }
     return () => { if (walkRef.current) clearInterval(walkRef.current) }
-  }, [currentState])
+  }, [currentState, activity])
 
   const showBubble = useCallback((text: string, type: 'speak' | 'thought' = 'speak') => {
     const id = ++bubbleId
@@ -140,8 +153,8 @@ export const PetView = memo(function PetView({ modelSource, expression, mood, on
       onMouseUp={handleMouseUp}
     >
       {mood === 'sleepy' && <div className="pet-zzz">z Z z</div>}
-      {modelSource.type === 'live2d' ? (
-        <Live2DView modelPath={modelSource.live2d.modelPath} state={displayState} width={180} height={200} />
+      {useLive2d ? (
+        <Live2DView modelPath={modelSource.live2d.modelPath} state={displayState} width={180} height={200} onLoadError={() => setLive2dFailed(true)} />
       ) : (
         <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={displayState} size={140} />
       )}

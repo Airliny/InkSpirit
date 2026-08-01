@@ -1,8 +1,21 @@
 import { BrowserWindow, screen, ipcMain } from 'electron'
 import { join } from 'path'
+import {
+  createWindowModeState,
+  transitionToPanel,
+  transitionToPet,
+  clampPosition,
+  PET_SIZE,
+  PANEL_SIZE,
+  type WindowModeState,
+  type WorkArea
+} from '../core/windowState'
+import { getConfig, setConfig } from '../core/config'
 
 let mainWindow: BrowserWindow | null = null
 let isPetMode = true
+/** Independent pet/panel positions — the pet always returns "home" */
+let modeState: WindowModeState = createWindowModeState(loadSavedPetPosition())
 let dragOrigin = {
   winX: 0, winY: 0,
   startMouseX: 0, startMouseY: 0,
@@ -14,17 +27,35 @@ let isInertia = false
 let hangTimer: ReturnType<typeof setTimeout> | null = null
 let isHanging = false
 
-const PET_W = 180
-const PET_H = 200
+const PET_W = PET_SIZE.width
+const PET_H = PET_SIZE.height
+
+function loadSavedPetPosition(): { x: number; y: number } | null {
+  const raw = getConfig('window_pet_position')
+  if (!raw) return null
+  const [x, y] = raw.split(',').map(Number)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return { x, y }
+}
+
+function persistPetPosition(): void {
+  if (modeState.petPosition) {
+    setConfig('window_pet_position', `${modeState.petPosition.x},${modeState.petPosition.y}`)
+  }
+}
 
 export function createMainWindow(): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
 
+  const initialPos = modeState.petPosition
+    ? clampPosition(modeState.petPosition, workAreaAt(modeState.petPosition), PET_SIZE)
+    : { x: width - PET_W, y: height - 280 }
+
   mainWindow = new BrowserWindow({
-    width: 180,
-    height: 200,
-    x: width - PET_W,
-    y: height - 280,
+    width: PET_W,
+    height: PET_H,
+    x: initialPos.x,
+    y: initialPos.y,
     title: 'InkSpirit',
     frame: false,
     transparent: true,
@@ -62,7 +93,14 @@ export function createMainWindow(): BrowserWindow {
 export function setPetMode(): void {
   if (!mainWindow) return
   isPetMode = true
-  mainWindow.setSize(180, 200)
+  // panel → pet: remember the panel spot, return the pet to its own home
+  const [x, y] = mainWindow.getPosition()
+  const transition = transitionToPet(modeState, { x, y }, workAreaAt({ x, y }))
+  modeState = transition.state
+  mainWindow.setPosition(transition.position.x, transition.position.y)
+  persistPetPosition()
+
+  mainWindow.setSize(PET_W, PET_H)
   mainWindow.setResizable(false)
   mainWindow.setHasShadow(false)
   mainWindow.setIgnoreMouseEvents(false)
@@ -72,11 +110,21 @@ export function setPetMode(): void {
 export function setPanelMode(): void {
   if (!mainWindow) return
   isPetMode = false
-  mainWindow.setSize(340, 520)
+  // pet → panel: remember the pet's home; panel has its own position
+  const [x, y] = mainWindow.getPosition()
+  const transition = transitionToPanel(modeState, { x, y }, workAreaAt({ x, y }))
+  modeState = transition.state
+  persistPetPosition()
+  if (transition.position) {
+    mainWindow.setPosition(transition.position.x, transition.position.y)
+  } else {
+    mainWindow.center() // first ever panel open
+  }
+
+  mainWindow.setSize(PANEL_SIZE.width, PANEL_SIZE.height)
   mainWindow.setResizable(true)
   mainWindow.setHasShadow(true)
   mainWindow.setIgnoreMouseEvents(false)
-  mainWindow.center()
   if (!mainWindow.isDestroyed()) mainWindow.webContents.send('window:mode', 'panel')
 }
 
@@ -105,15 +153,20 @@ export function moveWindowTo(x: number, y: number): void {
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
 }
 
-/** Work area (incl. origin) of the display the window currently sits on (multi-monitor aware) */
-function workAreaFor(win: BrowserWindow): { x: number; y: number; width: number; height: number } {
-  const [x, y] = win.getPosition()
+/** Work area (incl. origin) of the display containing a point (multi-monitor aware) */
+function workAreaAt(pos: { x: number; y: number }): WorkArea {
   try {
-    const display = screen.getDisplayNearestPoint({ x, y })
+    const display = screen.getDisplayNearestPoint(pos)
     return display.workArea
   } catch {
     return screen.getPrimaryDisplay().workArea
   }
+}
+
+/** Work area of the display the window currently sits on */
+function workAreaFor(win: BrowserWindow): WorkArea {
+  const [x, y] = win.getPosition()
+  return workAreaAt({ x, y })
 }
 
 /**

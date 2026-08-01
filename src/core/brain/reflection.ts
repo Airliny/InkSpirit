@@ -47,7 +47,13 @@ function detectAndEvolvePersonality(userMsg: string, assistantMsg: string): void
   if (/直说|别绕|直接点/.test(combined)) adjustments.formality = 0.2
 
   if (Object.keys(adjustments).length > 0) {
-    tryEvolvePersonality(adjustments as any)
+    const reasons = [
+      adjustments.humor ? '聊天气氛轻松，经常一起笑' : null,
+      adjustments.gentleness ? '经常使用温柔体贴的表达方式' : null,
+      adjustments.professionalism ? '用户经常讨论专业和技术话题' : null,
+      adjustments.formality !== undefined ? '用户喜欢随性直接的交流方式' : null
+    ].filter(Boolean).join('，') || null
+    tryEvolvePersonality(adjustments as any, reasons, 'conversation')
   }
 }
 

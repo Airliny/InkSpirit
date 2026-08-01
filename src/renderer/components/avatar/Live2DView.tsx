@@ -10,6 +10,33 @@ const MOTION_MAP: Record<string, string> = {
   yawn: 'yawn', surprised: 'surprised', happy: 'happy', sad: 'sad', love: 'love', blink: 'idle'
 }
 
+/** Try loading the Cubism core runtimes (served via cubism:// from resources).
+ *  Failure is graceful — Live2D is simply unavailable and we fall back. */
+async function tryLoadCubism(): Promise<boolean> {
+  const w = window as unknown as Record<string, unknown>
+  if (w.Live2DCubismCore && w.Live2D) return true
+  for (const file of ['live2dcubismcore.min.js', 'live2d.min.js']) {
+    const loaded = await loadScript(`cubism://${file}`)
+    if (!loaded) continue
+  }
+  return !!(w.Live2DCubismCore || w.Live2D)
+}
+
+function loadScript(src: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = document.createElement('script')
+    s.src = src
+    s.onload = () => resolve(true)
+    s.onerror = () => resolve(false)
+    document.head.appendChild(s)
+  })
+}
+
+/** Convert an absolute filesystem path to a local:// URL the renderer can fetch */
+export function toLocalUrl(absPath: string): string {
+  return 'local://' + absPath.replace(/\\/g, '/')
+}
+
 async function getSharedApp(canvas: HTMLCanvasElement, width: number, height: number): Promise<PixiApplication> {
   if (appInstance) {
     appRefCount++
@@ -45,12 +72,16 @@ interface Live2DViewProps {
   width?: number
   height?: number
   onClick?: () => void
+  /** Called when Live2D is unavailable — lets the parent fall back to sprites */
+  onLoadError?: (reason: string) => void
 }
 
-export function Live2DView({ modelPath, state = 'idle', width = 200, height = 200, onClick }: Live2DViewProps) {
+export function Live2DView({ modelPath, state = 'idle', width = 200, height = 200, onClick, onLoadError }: Live2DViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const modelRef = useRef<any>(null)
   const [error, setError] = useState<string | null>(null)
+  // Bumped to re-run the load pipeline after a context restore
+  const [gen, setGen] = useState(0)
 
   // Switch motion when animation state changes
   useEffect(() => {
@@ -73,6 +104,20 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
     let acquired = false
     setError(null)
 
+    // H2: unify the WebGL context lifecycle. lost → release our renderer
+    // resources; restored → re-run the load pipeline (the body reconnects,
+    // AI/behavior/emotion/position are untouched).
+    const canvas = canvasRef.current
+    const onContextLost = (e: Event) => {
+      e.preventDefault()
+      releaseOnce()
+    }
+    const onContextRestored = () => {
+      if (!destroyed) setGen((g) => g + 1)
+    }
+    canvas.addEventListener('webglcontextlost', onContextLost)
+    canvas.addEventListener('webglcontextrestored', onContextRestored)
+
     // Release the shared Pixi app exactly once per acquisition, so an
     // unmount racing with a slow model load can't destroy an app that
     // another Live2DView is still rendering with.
@@ -84,11 +129,23 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
 
     async function load() {
       try {
+        // Cubism core must be loaded BEFORE the library (it hard-throws otherwise)
+        const coreOk = await tryLoadCubism()
+        if (!coreOk) {
+          const reason = 'Live2D 核心不可用'
+          if (!destroyed) {
+            setError(reason)
+            onLoadError?.(reason)
+          }
+          return
+        }
+
         const { Live2DModel } = await import('pixi-live2d-display')
-        const app = await getSharedApp(canvasRef.current!, width, height)
+        const app = await getSharedApp(canvas, width, height)
         acquired = true
 
-        const model = await Live2DModel.from(modelPath)
+        // The library loads via XHR — must be a fetchable URL, not a raw path
+        const model = await Live2DModel.from(toLocalUrl(modelPath))
         if (destroyed) { releaseOnce(); return }
 
         // Center and scale (getBounds can be unreliable before first render)
@@ -121,7 +178,9 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
       } catch (e: any) {
         releaseOnce()
         if (!destroyed) {
-          setError(e.message)
+          const reason = e?.message ?? '模型加载失败'
+          setError(reason)
+          onLoadError?.(reason)
         }
       }
     }
@@ -132,8 +191,10 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
       destroyed = true
       modelRef.current = null
       releaseOnce()
+      canvas.removeEventListener('webglcontextlost', onContextLost)
+      canvas.removeEventListener('webglcontextrestored', onContextRestored)
     }
-  }, [modelPath, width, height])
+  }, [modelPath, width, height, gen])
 
   return (
     <div

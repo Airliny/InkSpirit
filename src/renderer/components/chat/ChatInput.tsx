@@ -1,13 +1,21 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 
 interface ChatInputProps {
   onSend: (message: string) => void
   disabled?: boolean
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export interface ChatInputHandle {
+  focus: () => void
+}
+
+export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({ onSend, disabled }, ref) {
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus()
+  }))
 
   function handleSend() {
     const trimmed = text.trim()
@@ -46,4 +54,4 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       </button>
     </div>
   )
-}
+})

@@ -1,15 +1,20 @@
 import { ChatMessage, IAIClient, AIProviderConfig, AIProvider, PROVIDER_DEFAULTS } from './brain/ai/types'
 import { OpenAIProvider } from './brain/ai/openai'
 import { AnthropicProvider } from './brain/ai/anthropic'
-import { buildSystemPrompt, PromptContext } from './brain/prompt'
+import { buildSystemPrompt, buildAgentContext, AgentContext } from './brain/prompt'
+import { getLatestSituation } from './world/sensor'
+import { situationPromptLine } from './world/situation'
 import { analyzeConversationForMemories } from './brain/reflection'
 import { getActivePersonality } from './soul/personality'
 import {
   getCurrentEmotion, hurtEmotion, feelScared, feelJealous,
   feelAppreciated, feelDisappointed, feelLonely, forgiveEmotion, isIgnoring
 } from './soul/emotion'
-import { getRelationship, recordInteraction } from './soul/relationship'
+import { getRelationship, recordRelationshipEvent, acknowledgeMemoryFeedback, recordInteraction } from './soul/relationship'
+import { classifyInteraction, classifyRecallFeedback, recallEvent } from './soul/relationshipEvents'
 import { addMemory } from './soul/memory'
+import { assignName } from './soul/identity'
+import { needsIdentityAnalysis, analyzeIdentityIntent } from './soul/identityIntent'
 import { decideMode, type PersonalityMode } from './soul/mode'
 import { getDatabase } from './database'
 import { getConfig, setConfig } from './config'
@@ -26,6 +31,9 @@ export class Agent {
   private currentConversationId: string | null = null
   private currentProvider: AIProvider = 'openai'
   private currentModel: string = ''
+  /** Set when the last assistant reply mentioned a memory; consumed by the
+   *  next user message as recall feedback (confirm / correct / neutral) */
+  private awaitingRecallConfirmation = false
 
   constructor() {
     const savedLocal = getConfig('local_model')
@@ -195,39 +203,105 @@ export class Agent {
       this.currentConversationId = uuidv4()
     }
 
+    const pipe = await this.runPipeline(userMessage, client)
+    if (pipe.kind === 'refuse') return this.safetyRefusal(pipe.level)
+    if (pipe.kind === 'naming') return this.namingResponse(pipe.name)
+    if (pipe.kind === 'cold') return this.coldResponse(pipe.hostility, provider, model, userMessage)
+
+    const messages: ChatMessage[] = [
+      pipe.systemMsg,
+      ...this.conversationHistory.slice(-20),
+      { role: 'user', content: userMessage }
+    ]
+
+    this.conversationHistory.push({ role: 'user', content: userMessage })
+    if (this.conversationHistory.length > 50) {
+      this.conversationHistory = this.conversationHistory.slice(-50)
+    }
+
+    const stream = client.streamChat(messages)
+
+    const self = this
+    async function* wrappedStream(): AsyncGenerator<string, void, unknown> {
+      let fullResponse = ''
+      for await (const chunk of stream) {
+        fullResponse += chunk
+        yield chunk
+      }
+      self.recordExchange(userMessage, fullResponse, provider, model)
+      // Semantic review of the reply: prefer local model; short replies are
+      // sampled randomly (~20%) instead of always checked, to save tokens
+      const reviewDetector = self.localClient ?? client
+      const isShort = fullResponse.trim().length <= 20
+      const unsafeOut = isShort && Math.random() >= 0.2
+        ? 'none' as const
+        : await detectUnsafe(reviewDetector, fullResponse)
+      if (unsafeOut === 'none') {
+        analyzeConversationForMemories(userMessage, fullResponse, self.currentConversationId!).catch(() => {})
+        self.trySemanticMemory(client, userMessage, fullResponse).catch(() => {})
+      }
+    }
+
+    return wrappedStream()
+  }
+
+  /**
+   * The soul pipeline: every interaction changes the pet BEFORE any LLM call.
+   * Shared by the normal chat path AND the response-cache path (M1 fix) —
+   * we cache the reply, never the experience.
+   */
+  async runPipeline(
+    userMessage: string,
+    client?: IAIClient
+  ): Promise<
+    | { kind: 'ok'; systemMsg: ChatMessage; mode: PersonalityMode }
+    | { kind: 'refuse'; level: ViolationLevel }
+    | { kind: 'naming'; name: string }
+    | { kind: 'cold'; hostility: number }
+  > {
+    const resolvedClient = client ?? this.ensureClient()
+
     // Content safety FIRST — before anything else (incl. naming), so a
     // violating message or a violating name can't slip through.
     // Token-lean: skip ultra-short casual messages, prefer the free local
     // model when available; the main model's own guardrails back us up.
     const skipCheck = userMessage.trim().length <= 8
-    const detector = this.localClient ?? client
+    const detector = this.localClient ?? resolvedClient
     const violation = skipCheck ? 'none' as const : await detectUnsafe(detector, userMessage)
     if (violation !== 'none') {
-      return this.safetyRefusal(violation)
+      return { kind: 'refuse', level: violation }
     }
 
-    // Naming: if the user gives the pet a name, remember it for good.
-    // The bare name is always checked (tiny prompt, prevents bypass via a
-    // short message like "叫你冰毒").
-    const nameMatch = extractGivenName(userMessage)
-    if (nameMatch) {
-      const nameV = await detectUnsafe(detector, nameMatch)
-      if (nameV !== 'none') {
-        return this.safetyRefusal('hard')
+    // Identity Intent Layer：命名是高语义、低频的行为，交给 AI 理解而不是
+    // 规则猜测。关键词只做节流（省成本），LLM 才是理解层——AI 不是审核员。
+    // 只有用户明确决定（assign_name + 高置信）才写入身份事件；discuss/none
+    // 一律继续普通聊天，不打断、不产生事件。
+    if (needsIdentityAnalysis(userMessage)) {
+      const intent = await analyzeIdentityIntent(this.localClient ?? resolvedClient, userMessage)
+      if (intent.intent === 'assign_name' && intent.name) {
+        // 名字本身仍要过安全检测，防止短消息绕过（"叫你冰毒"）
+        const nameV = await detectUnsafe(detector, intent.name)
+        if (nameV !== 'none') {
+          return { kind: 'refuse', level: 'hard' }
+        }
+        assignName(intent.name)
+        // 命名是用户主动建立身份称呼的行为：关系层只感知这个事件本身
+        // （信任微增），名字是 Identity 不是 Personality 开关——人格不动。
+        recordRelationshipEvent({
+          type: 'name_assigned',
+          intensity: 1,
+          timestamp: Date.now(),
+          source: 'identity',
+          metadata: { name: intent.name, reason: '用户主动建立身份称呼' }
+        })
+        return { kind: 'naming', name: intent.name }
       }
-      setConfig('pet_name', nameMatch)
-      addMemory(`用户给我起名叫「${nameMatch}」`, {
-        type: 'semantic',
-        importance: 0.9,
-        tags: ['名字']
-      })
-      return this.namingResponse(nameMatch)
     }
 
     const sentiment = analyzeSentiment(userMessage)
 
     if (isIgnoring() && sentiment.hostility > 0.3) {
-      return this.coldResponse(sentiment.hostility, provider, model, userMessage)
+      return { kind: 'cold', hostility: sentiment.hostility }
     }
 
     if (isIgnoring() && sentiment.kindness > 0.5) {
@@ -253,14 +327,46 @@ export class Agent {
       forgiveEmotion(0.02)
     }
 
+    // Relationship v2: classify the interaction into relationship events.
+    // Interaction COUNT no longer drives the vector — event types do.
+    for (const event of classifyInteraction({
+      userMsg: userMessage,
+      hostility: sentiment.hostility,
+      kindness: sentiment.kindness
+    })) {
+      recordRelationshipEvent(event)
+    }
+
+    // Recall feedback: if the pet just mentioned a memory, this reply tells
+    // whether it was right. Confirmed → relationship reward; wrong → no
+    // reward (the correction event above already handles the dip).
+    if (this.awaitingRecallConfirmation) {
+      const outcome = classifyRecallFeedback(userMessage)
+      const ev = outcome ? recallEvent(null, outcome) : null
+      if (ev) recordRelationshipEvent(ev)
+      this.awaitingRecallConfirmation = false
+    }
+
     // How the user treats the pet slowly reshapes its personality:
     // kindness breeds warmth, hostility breeds guardedness & humor as a shield
     if (sentiment.kindness > 0.6) {
-      tryEvolvePersonality({ warmth: 0.75, gentleness: 0.7 })
+      tryEvolvePersonality(
+        { warmth: 0.75, gentleness: 0.7 },
+        '用户经常表达善意与关怀，砚灵慢慢变得更温暖体贴',
+        'care'
+      )
     } else if (sentiment.hostility > 0.5) {
-      tryEvolvePersonality({ gentleness: 0.3, humor: 0.65, warmth: 0.3 })
+      tryEvolvePersonality(
+        { gentleness: 0.3, humor: 0.65, warmth: 0.3 },
+        '长期被严厉对待，砚灵变得收敛，学会用幽默保护自己',
+        'conflict'
+      )
     } else if (sentiment.hostility > 0.2) {
-      tryEvolvePersonality({ gentleness: 0.45 })
+      tryEvolvePersonality(
+        { gentleness: 0.45 },
+        '偶尔被指责，砚灵说话不再那么直接',
+        'conflict'
+      )
     }
 
     const personality = getActivePersonality()
@@ -270,64 +376,43 @@ export class Agent {
     // Dual mode: auto-detect per message (model-assisted), or use manual setting
     const modeSetting = getConfig('personality_mode') || 'auto'
     const mode: PersonalityMode = modeSetting === 'auto'
-      ? await decideMode(this.localClient ?? client, userMessage)
+      ? await decideMode(this.localClient ?? resolvedClient, userMessage)
       : (modeSetting === 'professional' ? 'professional' : 'companion')
     if (modeSetting === 'auto') {
       setConfig('personality_mode_current', mode)
     }
 
-    const ctx: PromptContext = {
+    // World Model feeds a one-line situation awareness into the prompt
+    const situation = getLatestSituation()
+    const situationLine = situation ? situationPromptLine(situation) : null
+
+    const ctx: AgentContext = buildAgentContext({
       personalityTraits: personality.traits,
       emotionState: emotion,
       relationshipStage: relationship.stage,
       currentTime: new Date().toISOString(),
-      mode
-    }
+      mode,
+      situation: situationLine ?? undefined
+    })
 
-    const systemMsg = buildSystemPrompt(ctx)
+    return { kind: 'ok', systemMsg: buildSystemPrompt(ctx), mode }
+  }
 
-    const messages: ChatMessage[] = [
-      systemMsg,
-      ...this.conversationHistory.slice(-20),
-      { role: 'user', content: userMessage }
-    ]
-
+  /**
+   * Persist a completed exchange (LLM-generated OR cache-served) into the
+   * conversation and usage ledger. The cache path must call this too, so a
+   * cached reply still "happens" to the pet.
+   */
+  recordExchange(userMessage: string, assistantReply: string, provider: string, model: string): void {
     this.conversationHistory.push({ role: 'user', content: userMessage })
+    this.conversationHistory.push({ role: 'assistant', content: assistantReply })
     if (this.conversationHistory.length > 50) {
       this.conversationHistory = this.conversationHistory.slice(-50)
     }
-
-    const stream = client.streamChat(messages)
-
-    const self = this
-    async function* wrappedStream(): AsyncGenerator<string, void, unknown> {
-      let fullResponse = ''
-      for await (const chunk of stream) {
-        fullResponse += chunk
-        yield chunk
-      }
-      self.conversationHistory.push({ role: 'assistant', content: fullResponse })
-      // Bound the in-memory history so long sessions don't leak memory
-      if (self.conversationHistory.length > 50) {
-        self.conversationHistory = self.conversationHistory.slice(-50)
-      }
-      self.saveConversation()
-      recordInteraction()
-      recordUsage(provider, model, userMessage, fullResponse)
-      // Semantic review of the reply: prefer local model; short replies are
-      // sampled randomly (~20%) instead of always checked, to save tokens
-      const reviewDetector = self.localClient ?? client
-      const isShort = fullResponse.trim().length <= 20
-      const unsafeOut = isShort && Math.random() >= 0.2
-        ? 'none' as const
-        : await detectUnsafe(reviewDetector, fullResponse)
-      if (unsafeOut === 'none') {
-        analyzeConversationForMemories(userMessage, fullResponse, self.currentConversationId!).catch(() => {})
-        self.trySemanticMemory(client, userMessage, fullResponse).catch(() => {})
-      }
-    }
-
-    return wrappedStream()
+    this.saveConversation()
+    recordUsage(provider, model, userMessage, assistantReply)
+    // A reply that references a memory opens a recall-confirmation window
+    this.awaitingRecallConfirmation = /记得|想起来|你之前说|上次你说|以前你说/.test(assistantReply)
   }
 
   /**
@@ -362,6 +447,9 @@ export class Agent {
       tags: ['语义记忆'],
       sourceConversationId: this.currentConversationId
     })
+    // Memory feedback: a stored fact about the user rewards understanding —
+    // especially right after the user corrected us
+    acknowledgeMemoryFeedback()
   }
 
   private async *safetyRefusal(level: ViolationLevel): AsyncGenerator<string, void, unknown> {
@@ -380,9 +468,9 @@ export class Agent {
 
   private async *namingResponse(name: string): AsyncGenerator<string, void, unknown> {
     const responses = [
-      `（愣了一下，心里一暖）…${name}。嗯，我喜欢这个名字。`,
-      `${name}…（轻轻念了一遍）从今天起，这就是我的名字了。`,
-      `（眼睛亮了）你叫我${name}？好，我记住了。`
+      `好，我记住了。`,
+      `嗯，记住了。`,
+      `（点点头）好。`
     ]
     const msg = responses[Math.floor(Math.random() * responses.length)]
     this.conversationHistory.push({ role: 'assistant', content: msg })
@@ -487,28 +575,4 @@ function analyzeSentiment(text: string): Sentiment {
   const lonely = lonelyWords.some(w => lower.includes(w))
 
   return { hostility, kindness, scared, jealous, disappointed, lonely }
-}
-
-// --- Naming detection ---
-
-/** Detect "I'll name you X" patterns and extract the name */
-function extractGivenName(text: string): string | null {
-  const patterns = [
-    /给你(起个|取个|起)?名字叫\s*[「「]?([\u4e00-\u9fa5A-Za-z0-9]{1,8})[」」]?/,
-    /(?:给你|帮你)取个名字[，,]\s*叫\s*([\u4e00-\u9fa5A-Za-z0-9]{1,8})/,
-    /名字叫\s*([\u4e00-\u9fa5A-Za-z0-9]{1,8})/,
-    /(?:以后|从今天起)叫你\s*([\u4e00-\u9fa5A-Za-z0-9]{1,8})/
-  ]
-  // Words that shouldn't be mistaken for a name
-  const BAD_NAMES = new Set(['别跑', '别动', '不说话', '闭嘴', '去死', '滚', '笨蛋', '傻子', '不要', '闭嘴了'])
-
-  for (const p of patterns) {
-    const m = text.match(p)
-    if (m && m[1]) {
-      const name = m[1].trim()
-      if (name.length === 0 || BAD_NAMES.has(name)) continue
-      return name
-    }
-  }
-  return null
 }

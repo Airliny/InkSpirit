@@ -4,7 +4,8 @@
 //   1. GH_TOKEN=ghp_xxx npm run publish:release   (repo scope)
 //   2. bump version in package.json first
 import { execSync } from 'child_process'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { createHash } from 'crypto'
 import { resolve } from 'path'
 
 const root = resolve(process.cwd())
@@ -21,6 +22,7 @@ const UPLOADS = `https://uploads.github.com/repos/${OWNER}/${REPO}`
 
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 const version = pkg.version
+const minimumVersion = pkg.minimumVersion ?? '0.0.0'
 
 const setup = resolve(root, 'dist', `InkSpirit-Setup-${version}.exe`)
 const latestYml = resolve(root, 'dist', 'latest.yml')
@@ -30,6 +32,35 @@ for (const f of [setup, latestYml, blockmap]) {
   if (!existsSync(f)) {
     console.error(`Missing file: ${f}\nRun "pnpm package" first.`)
     process.exit(1)
+  }
+}
+
+/** Latest schema version from src/core/migrations.ts (regex, no TS eval) */
+function latestSchemaVersion() {
+  const src = readFileSync(resolve(root, 'src/core/migrations.ts'), 'utf8')
+  const versions = [...src.matchAll(/version:\s*(\d+),/g)].map((m) => Number(m[1]))
+  return Math.max(0, ...versions)
+}
+
+function sha256(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex')
+}
+
+/** Build the update manifest the client trusts (never parse release pages) */
+function buildManifest() {
+  const notesPath = resolve(root, 'RELEASE_NOTES.md')
+  const notes = existsSync(notesPath)
+    ? readFileSync(notesPath, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    : []
+  return {
+    version,
+    minimumVersion,
+    releaseDate: new Date().toISOString(),
+    download: `InkSpirit-Setup-${version}.exe`,
+    sha256: sha256(setup),
+    databaseVersion: latestSchemaVersion(),
+    soulVersion: 1,
+    notes: notes.slice(0, 12)
   }
 }
 
@@ -75,6 +106,12 @@ async function main() {
   console.log(JSON.parse(upload(`${UPLOADS}/releases/${relId}/assets`, latestYml, 'latest.yml')).state)
   console.log('Uploading blockmap...')
   console.log(JSON.parse(upload(`${UPLOADS}/releases/${relId}/assets`, blockmap, `InkSpirit-Setup-${version}.exe.blockmap`)).state)
+
+  // Update manifest — the client's single source of truth
+  const manifestPath = resolve(root, 'dist', 'manifest.json')
+  writeFileSync(manifestPath, JSON.stringify(buildManifest(), null, 2), 'utf8')
+  console.log('Uploading manifest.json...')
+  console.log(JSON.parse(upload(`${UPLOADS}/releases/${relId}/assets`, manifestPath, 'manifest.json')).state)
 
   console.log(`\nPublished v${version}: https://github.com/${OWNER}/${REPO}/releases/tag/v${version}`)
 }

@@ -1,20 +1,27 @@
-import { app, BrowserWindow, protocol, net, powerMonitor, screen } from 'electron'
+import { app, BrowserWindow, protocol, net, powerMonitor, screen, dialog } from 'electron'
 import { createMainWindow, getMainWindow } from './windowManager'
 import { createTray } from './trayManager'
 import { registerIpcHandlers } from './ipc/index'
-import { getDatabase, closeDatabase } from '../core/database'
+import { openDatabase, getDatabase, recoverDatabase, closeDatabase, type DatabaseState } from '../core/database'
 import { Agent } from '../core/agent'
-import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTracker'
+import { markActive, markIdle, getTotalWorkMinutes, getCurrentStreakMin } from './perception/timeTracker'
 import { getForegroundWindow } from './perception/windowScanner'
 import { classifyForeground, isDoNotDisturb, type ForegroundScene } from './perception/sceneDetector'
 import { hangOnWindow, physicalRectToDip } from './windowManager'
-import { startGuardian, setGuardianDisturbBlocked } from './guardian/guardian'
+import { pollGuardian, setGuardianDisturbBlocked } from './guardian/guardian'
+import { pickIdleAnimation, pickAmbientThought } from '../core/autonomy/bodyLoop'
 import { initUpdater } from './updater/updater'
 import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay, emotionToExpression, flushEmotion, type EmotionState } from '../core/soul/emotion'
-import { getRelationship } from '../core/soul/relationship'
-import { tick, getPetState, type BehaviorImpulse } from '../core/autonomy/drives'
-import { getBehaviorStyle } from '../core/soul/personality'
-import { getMemorableMemory, consolidateMemories, decayMemories } from '../core/soul/memory'
+import { getRelationship, recordRelationshipEvent } from '../core/soul/relationship'
+import { shouldRewardRecall, recallEvent } from '../core/soul/relationshipEvents'
+import { tick, getPetState } from '../core/autonomy/drives'
+import { decide, type DirectorInput, type BehaviorAction } from '../core/autonomy/behaviorDirector'
+import { createBudget, maxForPersonality, type BudgetState } from '../core/autonomy/behaviorBudget'
+import { getBehaviorStyle, getActivePersonality } from '../core/soul/personality'
+import { getMemorableMemory, recordMemoryRecall, consolidateMemories, decayMemories } from '../core/soul/memory'
+import { feed, refreshPatternContext, getLatestSituation } from '../core/world/sensor'
+import { recordActiveMinutes, prunePatternRows } from '../core/world/patternsStore'
+import { toDateKey } from '../core/world/patterns'
 import { pathToFileURL } from 'url'
 import { migrateToSecure } from '../core/secureStore'
 import { preloadConfig, getConfig, setConfig } from '../core/config'
@@ -27,6 +34,10 @@ let userIdleMs = 0
 let totalWorkMin = 0
 let lastImpulseWasAt = Date.now()
 let currentScene: ForegroundScene = 'work'
+let behaviorBudget: BudgetState = createBudget(3)
+let userReturnedAfterMs = 0
+let userReturnedAt = 0
+let lastRecallMemory: import('../core/soul/memory').Memory | null = null
 
 // --- Crash safety: never die silently ---
 
@@ -45,6 +56,44 @@ process.on('unhandledRejection', (reason) => {
   writeLog(`unhandledRejection: ${String(reason)}`)
 })
 
+/**
+ * Recovery Mode: DB is unusable. Native dialog only — no business tables,
+ * no personality/memory loading, so it can never deadlock on the DB itself.
+ * "宁可降级，也不能退出" — at minimum the user sees a window with an action.
+ */
+async function handleStartupDbFailure(state: DatabaseState): Promise<void> {
+  writeLog(`startup DB failure: ${state.lastError}`)
+  const { response } = await dialog.showMessageBox({
+    type: 'error',
+    title: '砚灵无法启动',
+    message: '砚灵的数据文件损坏，无法正常启动。',
+    detail: `错误：${state.lastError}\n\n点击「修复」会先把损坏的数据文件备份到你的电脑上（不会被删除），然后重新初始化并重启。\n\n历史人格、记忆和关系无法从损坏文件中恢复。`,
+    buttons: ['修复并重新启动', '退出'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  })
+  if (response === 0) {
+    const recovered = recoverDatabase()
+    if (recovered.status === 'healthy') {
+      app.relaunch()
+      app.exit(0)
+      return
+    }
+    // Recovered DB still failing — surface the error once more, then quit
+    writeLog(`recovery failed: ${recovered.lastError}`)
+    await dialog.showMessageBox({
+      type: 'error',
+      title: '修复失败',
+      message: '重新初始化数据文件也失败了。',
+      detail: `错误：${recovered.lastError}\n\n请检查磁盘权限后重试。`,
+      buttons: ['退出'],
+      noLink: true
+    })
+  }
+  app.exit(0)
+}
+
 app.whenReady().then(() => {
   console.log(`[InkSpirit] v${app.getVersion()} starting. userData: ${app.getPath('userData')}`)
   protocol.handle('local', (request) => {
@@ -53,14 +102,56 @@ app.whenReady().then(() => {
     const fileUrl = pathToFileURL(filePath).href
     return net.fetch(fileUrl)
   })
+  // Cubism core runtimes for Live2D, served from bundled resources
+  // (proprietary files shipped with the app; missing → Live2D falls back)
+  protocol.handle('cubism', (request) => {
+    const name = request.url.slice('cubism://'.length).split('/')[0]
+    if (!name.endsWith('.js')) return new Response(null, { status: 400 })
+    const file = path.join(app.getAppPath(), 'resources', 'cubism', name)
+    try {
+      return new Response(fs.readFileSync(file), {
+        headers: { 'content-type': 'application/javascript; charset=utf-8' }
+      })
+    } catch {
+      return new Response(null, { status: 404 })
+    }
+  })
 
-  getDatabase()
+  // Startup protection: DB failure enters Recovery Mode — never a silent,
+  // invisible hanging process
+  const dbState = openDatabase()
+  if (dbState.status !== 'healthy') {
+    handleStartupDbFailure(dbState)
+    return
+  }
   preloadConfig()
   // Migrate legacy plaintext API keys to encrypted storage
   for (const p of ['openai', 'anthropic', 'deepseek']) {
     migrateToSecure(`${p}_api_key`)
   }
-  agent = new Agent()
+  try {
+    agent = new Agent()
+  } catch (err) {
+    // Brain config corrupted (e.g. broken personalities JSON) — recover
+    // rather than fail the whole app: clear soul-affecting rows and restart
+    writeLog(`Agent init failed: ${err instanceof Error ? err.message : err}`)
+    try {
+      const db = getDatabase()
+      db.prepare('DELETE FROM personalities').run()
+      db.prepare('DELETE FROM relationships').run()
+      db.prepare('DELETE FROM emotion_snapshots').run()
+    } catch {
+      // fall through to recovery dialog
+    }
+    const recovered = recoverDatabase()
+    if (recovered.status === 'healthy') {
+      app.relaunch()
+      app.exit(0)
+      return
+    }
+    handleStartupDbFailure(recovered)
+    return
+  }
   cleanupOrphanAvatars()
   const win = createMainWindow()
   win.webContents.on('render-process-gone', (_e, details) => {
@@ -73,10 +164,10 @@ app.whenReady().then(() => {
   registerIpcHandlers(agent)
   startPerception()
   startSceneWatcher()
+  startWorldSensor()
+  startPatternRecording()
   startHeartbeat()
-  startGuardian()
   startMoodSync()
-  startRecollection()
   startMemoryMaintenance()
   initUpdater()
   app.on('activate', () => {
@@ -114,9 +205,11 @@ function startPerception(): void {
       if (wasIdle) {
         wasIdle = false
         markActive()
-        // The pet noticed the user coming back after a long absence
-        if (idleStartedAt && Date.now() - idleStartedAt > 30 * 60 * 1000) {
-          emit('pet:speak', { message: pickWelcomeMessage(), action: 'welcome' })
+        // The pet noticed the user coming back — the Behavior Director
+        // decides how (and whether) to welcome them
+        if (idleStartedAt && Date.now() - idleStartedAt > 60 * 1000) {
+          userReturnedAfterMs = Date.now() - idleStartedAt
+          userReturnedAt = Date.now()
         }
         idleStartedAt = null
       }
@@ -132,54 +225,24 @@ function startPerception(): void {
   setInterval(update, 10000)
 }
 
-function pickWelcomeMessage(): string {
-  const emotion = getCurrentEmotion()
-  const hour = new Date().getHours()
-  const lateNight = hour >= 22 || hour < 6
-
-  if (lateNight) return '这么晚才回来…我有点担心。'
-  if (emotion.dominantEmotion === 'lonely' || emotion.loneliness > 0.4) return '你终于回来了…（轻轻靠过来）'
-  if (emotion.grudge > 0.5) return '……回来了。'
-  return pick([
-    '你回来啦！', '好久不见，想我了吗？', '欢迎回来~', '（远远看到你，眼睛亮了）'
-  ])
-}
-
-function pick(list: string[]): string {
-  return list[Math.floor(Math.random() * list.length)]
-}
-
 // ---- Heartbeat: drive-based, irregular ----
-
 function startHeartbeat(): void {
   // Tick every ~8 seconds with some jitter
   const tickRate = 8000 + Math.random() * 4000
 
   setInterval(() => {
     const elapsed = (Date.now() - lastImpulseWasAt) / 1000
-    const impulse = tick(elapsed, userIdleMs)
+    tick(elapsed, userIdleMs) // drive dynamics only — the director decides action
     lastImpulseWasAt = Date.now()
 
-    if (impulse.type !== 'none') {
-      actOnImpulse(impulse)
+    const { action, budget: nextBudget } = decide(buildDirectorInput())
+    behaviorBudget = nextBudget
+
+    if (action) {
+      actOn(action)
     } else {
-      // No strong drive right now: emit a natural idle behavior as the single
-      // source of animation state, weighted by current energy
+      // No candidate passed selection: natural idle animation as fallback
       emitIdleBehavior()
-      // The pet actively finds things to do every few ticks
-      if (Math.random() < 0.5) {
-        maybeProactiveAction()
-      }
-    }
-
-    // Daily rituals (morning / good night), checked occasionally
-    if (Math.random() < 0.2) {
-      maybeDailyRitual()
-    }
-
-    // Occasionally climb onto the foreground window
-    if (Math.random() < 0.06) {
-      maybeHangOnWindow()
     }
 
     // Forgiveness and emotional decay over time
@@ -190,45 +253,117 @@ function startHeartbeat(): void {
   }, tickRate)
 }
 
-// Single behavior source for the renderer: idle actions weighted by soul energy
+function buildDirectorInput(): DirectorInput {
+  const emotion = getCurrentEmotion()
+  const personality = getActivePersonality()
+  const traits = personality.traits
+
+  // Keep the budget allowance in sync with the personality
+  const maxHourly = maxForPersonality(traits.proactiveness)
+  if (behaviorBudget.maxHourlyInteractions !== maxHourly) {
+    behaviorBudget = createBudget(maxHourly)
+  }
+
+  // "Just returned" signal decays after two minutes
+  let returnedAfterMs = userReturnedAfterMs
+  if (userReturnedAt && Date.now() - userReturnedAt > 2 * 60 * 1000) {
+    returnedAfterMs = 0
+  }
+
+  const today = new Date().toDateString()
+  const mem = getMemorableMemory()
+  const recallable = mem !== null && Date.now() - lastRecollectionAt > RECOLLECT_COOLDOWN_MS
+  // Captured for actOn(): the director decides, this tick's memory is the one
+  // whose recollection gets rewarded
+  lastRecallMemory = mem
+
+  // Stage growth is tracked here and expressed via the director (never spoken directly)
+  const currentStage = getRelationship().stage
+  if (lastStage !== null && lastStage !== currentStage && pendingStageGrow === null) {
+    pendingStageGrow = currentStage
+  }
+  lastStage = currentStage
+
+  return {
+    situation: getLatestSituation(),
+    relationship: getRelationship(),
+    personality: traits,
+    emotion,
+    driveImpulse: getPetState().impulse,
+    flags: {
+      returnedAfterMs,
+      greetingDoneToday: getConfig('last_greeting_date') === today,
+      nightDoneToday: getConfig('last_night_date') === today,
+      recallableMemory: recallable,
+      recollectSnippet: mem ? (mem.content.length > 24 ? mem.content.slice(0, 24) + '…' : mem.content) : null,
+      canHang: !isDisturbing() && userIdleMs < 90000 && Date.now() - lastHangAt >= HANG_COOLDOWN_MS,
+      guardianSignal: pollGuardian(),
+      stageGrowTo: pendingStageGrow
+    },
+    budget: behaviorBudget
+  }
+}
+
+/** Single executor for director output: renderer channels + traceable logs */
+function actOn(action: BehaviorAction): void {
+  if (action.behavior) emit('pet:behavior', { behavior: action.behavior })
+  if (action.expression) emit('pet:expression', { expression: action.expression })
+  if (action.thought) emit('pet:thought', { thought: action.thought })
+  if (action.message) emit('pet:speak', { message: action.message, action: action.kind })
+
+  if (action.id === 'hang_window') {
+    maybeHangOnWindow().catch(() => {})
+  }
+
+  // Caller-side bookkeeping for once-per-day / cooldown behaviors
+  if (action.id === 'morning_greeting') setConfig('last_greeting_date', new Date().toDateString())
+  if (action.id === 'good_night') setConfig('last_night_date', new Date().toDateString())
+  if (action.id === 'recollect') {
+    lastRecollectionAt = Date.now()
+    // Memory → relationship feedback: a recall proves we remember, but only
+    // if the memory is still relevant is it rewarded
+    if (lastRecallMemory && shouldRewardRecall(lastRecallMemory)) {
+      recordMemoryRecall(lastRecallMemory.id)
+      const ev = recallEvent(lastRecallMemory.id, 'success')
+      if (ev) recordRelationshipEvent(ev)
+    }
+  }
+  if (action.id === 'stage_grow') pendingStageGrow = null
+  if (action.id === 'hang_window') lastHangAt = Date.now()
+
+  try {
+    const db = getDatabase()
+    db.prepare(
+      'INSERT INTO behavior_logs (id, behavior_id, triggered_by, outcome, timestamp) VALUES (?, ?, ?, ?, ?)'
+    ).run(
+      uuidv4(),
+      action.id,
+      'director',
+      JSON.stringify({
+        kind: action.kind,
+        urgency: action.urgency,
+        reason: action.reason,
+        message: action.message ?? null
+      }),
+      Date.now()
+    )
+  } catch {
+    // logging is best-effort
+  }
+}
+
+// Single body-loop fallback: pure avatar animations + ambient thoughts.
+// Boundary: nothing here is a "decision" — speech and active behavior
+// only ever come from the BehaviorDirector.
 function emitIdleBehavior(): void {
   const emotion = getCurrentEmotion()
   const style = getBehaviorStyle()
-  const rand = Math.random()
 
-  if (emotion.energy < 0.3) {
-    const pool = ['sit', 'yawn', 'blink', 'sit', 'sleep']
-    emit('pet:behavior', { behavior: pool[Math.floor(Math.random() * pool.length)] })
-  } else if (emotion.energy > 0.7) {
-    const pool = ['stretch', 'walk', 'look_around', 'stretch']
-    emit('pet:behavior', { behavior: pool[Math.floor(Math.random() * pool.length)] })
-  } else if (rand < 0.35) {
-    emit('pet:behavior', { behavior: 'blink' })
-  } else if (rand < 0.55) {
-    emit('pet:behavior', { behavior: 'look_around' })
-  } else if (rand < 0.75) {
-    emit('pet:behavior', { behavior: 'idle' })
-  } else {
-    emit('pet:behavior', { behavior: 'stretch' })
-  }
+  emit('pet:behavior', { behavior: pickIdleAnimation(emotion.energy, Math.random()) })
 
-  // Curiosity / expressiveness shows up as occasional inner thoughts while idle
-  if (Math.random() < style.idleThoughtChance) {
-    const thoughts = [
-      '（发呆）', '（在想事情）', '（望向窗外）', '（轻轻哼着什么）',
-      '（数着时间）', '（打了个哈欠）', '（看了看你）', '（伸了个懒腰）'
-    ]
-    emit('pet:thought', { thought: thoughts[Math.floor(Math.random() * thoughts.length)] })
-  }
-
-  // Proactive pets occasionally reach out when the user is around
-  if (userIdleMs < 60000 && Math.random() < style.greetFrequency * 0.06) {
-    const greetPool = [
-      '在忙什么呢？', '（悄悄看了你一眼）', '感觉好久没聊天了。',
-      '我刚在想，你好像心情不错？', '嗯…没事，就想看看你在不在。'
-    ]
-    emit('pet:speak', { message: greetPool[Math.floor(Math.random() * greetPool.length)], action: 'greet' })
-  }
+  // Ambient inner monologue (presence, not intent)
+  const thought = pickAmbientThought(style.idleThoughtChance, Math.random())
+  if (thought) emit('pet:thought', { thought })
 }
 
 // ---- Scene awareness: what kind of app the user is in (for don't-disturb) ----
@@ -257,53 +392,48 @@ function isDisturbing(): boolean {
   return isDoNotDisturb(currentScene)
 }
 
-// ---- Proactive actions: the pet actively finds things to do ----
+// ---- World Model: synthesize user situation, record daily rhythm ----
+// P1 scope: understand only. This loop NEVER triggers behavior — the
+// BehaviorDirector (P3) will be the only consumer that turns situations
+// into actions.
 
-function maybeProactiveAction(): void {
-  if (userIdleMs > 90000) return // user is away — don't disturb
-  if (isDisturbing()) return // meeting/game/video — stay quiet
-  const emotion = getCurrentEmotion()
-  const style = getBehaviorStyle()
-  const r = Math.random()
+function startWorldSensor(): void {
+  refreshPatternContext()
+  const tick = () => {
+    feed({
+      scene: currentScene,
+      idleMs: userIdleMs,
+      streakMin: getCurrentStreakMin(),
+      hour: new Date().getHours()
+    })
+  }
+  tick()
+  setInterval(tick, 30000)
+}
 
-  // Curious watching while the user is active
-  if (r < 0.3) {
-    emit('pet:behavior', { behavior: 'look_around' })
-    if (Math.random() < 0.45) {
-      const watching = [
-        '（看着你忙碌）', '（歪头看了看你）', '（凑近屏幕边）',
-        '（注意到你在打字）', '（好奇地看了你一眼）'
-      ]
-      emit('pet:thought', { thought: watching[Math.floor(Math.random() * watching.length)] })
+function startPatternRecording(): void {
+  let lastPruneDay = ''
+  setInterval(() => {
+    // One active minute per tick while the user is present
+    if (userIdleMs < 60000) {
+      recordActiveMinutes(1)
     }
-    return
-  }
-
-  // Self-entertainment: playful pets move around more when happy
-  if (r < 0.55 && emotion.happiness > 0.6 && emotion.energy > 0.5) {
-    const pool = ['walk', 'stretch', 'walk', 'look_around']
-    emit('pet:behavior', { behavior: pool[Math.floor(Math.random() * pool.length)] })
-    if (Math.random() < 0.35) {
-      emit('pet:thought', { thought: '（自己玩得很开心）' })
+    // Prune old rows once per day
+    const today = toDateKey(new Date())
+    if (today !== lastPruneDay) {
+      lastPruneDay = today
+      prunePatternRows(21)
     }
-    return
-  }
-
-  // Reach out more often than before
-  if (r > 0.8 && Math.random() < style.greetFrequency * 0.5) {
-    const greetPool = [
-      '在忙什么呢？', '（悄悄看了你一眼）', '感觉好久没聊天了。',
-      '我刚在想，你好像心情不错？', '嗯…没事，就想看看你在不在。',
-      '（轻轻戳了戳空气）嘿。', '要不要歇会儿聊两句？'
-    ]
-    emit('pet:speak', { message: greetPool[Math.floor(Math.random() * greetPool.length)], action: 'greet' })
-  }
+  }, 60000)
 }
 
 // ---- Climb onto windows (Shimeji-style) ----
+// Executed by the director's hang_window action; re-validates the window here.
 
 let lastHangAt = 0
 const HANG_COOLDOWN_MS = 5 * 60 * 1000
+let lastRecollectionAt = 0
+const RECOLLECT_COOLDOWN_MS = 3 * 60 * 60 * 1000
 
 async function maybeHangOnWindow(): Promise<void> {
   if (userIdleMs > 90000) return
@@ -327,176 +457,21 @@ async function maybeHangOnWindow(): Promise<void> {
   emit('pet:thought', { thought: thoughts[Math.floor(Math.random() * thoughts.length)] })
 }
 
-// ---- Daily rituals: morning greeting & good night, once per day ----
-function maybeDailyRitual(): void {
-  if (isDisturbing()) return
-  const hour = new Date().getHours()
-  const today = new Date().toDateString()
-  const lastGreeting = getConfig('last_greeting_date')
-  const lastNight = getConfig('last_night_date')
-  const emotion = getCurrentEmotion()
-
-  if (hour >= 7 && hour <= 10 && lastGreeting !== today && userIdleMs < 120000) {
-    setConfig('last_greeting_date', today)
-    const greetings = [
-      '早呀，新的一天。', '早上好。今天想做点什么？',
-      '（伸个懒腰）早~', '新的一天开始了，一起加油。'
-    ]
-    emit('pet:speak', { message: greetings[Math.floor(Math.random() * greetings.length)], action: 'greet' })
-    return
-  }
-
-  if (hour >= 22 && hour < 24 && lastNight !== today && userIdleMs < 120000) {
-    setConfig('last_night_date', today)
-    const nights = emotion.happiness > 0.5
-      ? ['晚安，明天见。', '今天也很开心，晚安~']
-      : ['晚安…明天会更好的。', '我守着你，晚安。']
-    emit('pet:speak', { message: nights[Math.floor(Math.random() * nights.length)], action: 'night' })
-  }
-}
-
-// ---- Natural recollection: the pet occasionally brings up old memories ----
-
-function startRecollection(): void {
-  let lastRecollectionAt = 0
-  setInterval(() => {
-    // Only when the user is active and enough time has passed since last time
-    if (userIdleMs > 120000) return
-    if (Date.now() - lastRecollectionAt < 3 * 60 * 60 * 1000) return
-    if (Math.random() > 0.35) return
-
-    const mem = getMemorableMemory()
-    if (!mem) return
-
-    lastRecollectionAt = Date.now()
-    const snippet = mem.content.length > 24 ? mem.content.slice(0, 24) + '…' : mem.content
-    emit('pet:speak', {
-      message: `（忽然想起）你之前说「${snippet}」…`,
-      action: 'recollect'
-    })
-  }, 60 * 60 * 1000)
-}
-
-function actOnImpulse(impulse: BehaviorImpulse): void {
-  const emotion = getCurrentEmotion()
-
-  switch (impulse.type) {
-    case 'move':
-      // Walk around or just stretch, depending on intensity
-      if (impulse.intensity > 0.7) {
-        emit('pet:behavior', { behavior: 'walk' })
-      } else {
-        emit('pet:behavior', { behavior: Math.random() < 0.5 ? 'stretch' : 'walk' })
-      }
-      break
-
-    case 'rest':
-      emit('pet:behavior', { behavior: impulse.intensity > 0.8 ? 'sleep' : 'sit' })
-      break
-
-    case 'explore':
-      emit('pet:behavior', { behavior: 'look_around' })
-      break
-
-    case 'socialize':
-      // Generate a natural social message based on emotion and relationship
-      {
-        const rel = getRelationship()
-        const msg = generateSocialMessage(emotion, rel.stage, impulse)
-        emit('pet:speak', { message: msg, action: 'greet' })
-      }
-      break
-
-    case 'self_soothe':
-      emit('pet:behavior', { behavior: 'sit' })
-      emit('pet:thought', { thought: impulse.reason })
-      break
-
-    case 'play':
-      emit('pet:behavior', { behavior: 'walk' })
-      if (emotion.happiness > 0.7) {
-        emit('pet:expression', { expression: 'happy' })
-      }
-      break
-
-    case 'think':
-      if (impulse.thought) {
-        emit('pet:thought', { thought: impulse.thought })
-      }
-      break
-  }
-
-  // Check inner thought from drive system
-  const { innerThought } = getPetState()
-  if (innerThought) {
-    emit('pet:thought', { thought: innerThought })
-  }
-}
-
-function generateSocialMessage(
-  emotion: ReturnType<typeof getCurrentEmotion>,
-  stage: string,
-  impulse: BehaviorImpulse
-): string {
-  if (impulse.type !== 'socialize') return ''
-
-  const dom = emotion.dominantEmotion
-
-  if (dom === 'lonely' || emotion.sadness > 0.5) {
-    return impulse.urgency > 0.7
-      ? '好想你...'
-      : '（小声）有人在吗...'
-  }
-
-  if (dom === 'jealous') {
-    return Math.random() < 0.5 ? '哼...' : '（瞥了一眼又转回去）'
-  }
-
-  if (dom === 'happy' || dom === 'excited') {
-    const happyGreetings = [
-      '在干嘛呀？', '今天天气真好！', '嘿嘿~', '主人！'
-    ]
-    return happyGreetings[Math.floor(Math.random() * happyGreetings.length)]
-  }
-
-  if (dom === 'curious') {
-    return '你在做什么呢？'
-  }
-
-  // Default: gentle presence
-  const casual = [
-    '我在呢。', '嗯~', '（轻轻碰了碰你）', '...'
-  ]
-  return casual[Math.floor(Math.random() * casual.length)]
-}
-
 function emit(channel: string, data: Record<string, unknown>): void {
   const win = getMainWindow()
   if (win && !win.isDestroyed()) win.webContents.send(channel, data)
 }
 
 // ---- Mood sync: push real soul state to the renderer ----
+// Presentation only — no speech here. Stage growth is expressed via the
+// BehaviorDirector (stage_grow intent), never spoken directly.
 
-let lastStage: string | null = null
-
-const STAGE_UP_MESSAGES: Record<string, string> = {
-  acquaintance: '（忽然）我们好像…越来越熟了。',
-  friend: '你在我心里，已经是朋友了。',
-  close_friend: '总觉得，和你待着就很安心。',
-  partner: '……有你陪着，真好。'
-}
+let lastStage: import('../core/soul/relationshipEvents').RelationshipStage | null = null
+let pendingStageGrow: import('../core/soul/relationshipEvents').RelationshipStage | null = null
 
 function startMoodSync(): void {
   setInterval(() => {
     const emotion = getCurrentEmotion()
-
-    // Relationship growth is acknowledged by the pet itself
-    const stage = getRelationship().stage
-    if (lastStage && lastStage !== stage && STAGE_UP_MESSAGES[stage]) {
-      emit('pet:speak', { message: STAGE_UP_MESSAGES[stage], action: 'grow' })
-    }
-    lastStage = stage
-
     emit('pet:expression', { expression: emotionToExpression(emotion.dominantEmotion) })
     emit('pet:mood', { mood: getMood(emotion) })
   }, 15000)

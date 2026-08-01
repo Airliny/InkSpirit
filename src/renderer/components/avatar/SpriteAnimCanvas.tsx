@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createRendererLifecycle } from '../../../core/rendererLifecycle'
 import type { AnimationState } from './modelTypes'
 
 interface SpriteAnimCanvasProps {
@@ -57,21 +58,18 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const gl = (canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true }) ||
-      canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null
-    if (!gl) return
 
     let raf = 0
     let disposed = false
-    let started = false
     let visible = true
-    let contextLost = false
+    let gl: WebGLRenderingContext | null = null
     let program: WebGLProgram | null = null
     let texture: WebGLTexture | null = null
     let uTime: WebGLUniformLocation | null = null
     let uAmp: WebGLUniformLocation | null = null
     let uSpeed: WebGLUniformLocation | null = null
     let uRes: WebGLUniformLocation | null = null
+    let img: HTMLImageElement | null = null
 
     // Pause rendering when the canvas is hidden (e.g. settings panel open)
     const observer = new IntersectionObserver((entries) => {
@@ -79,26 +77,35 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
     })
     observer.observe(canvas)
 
-    // Stop cleanly if the GPU context is lost (driver reset, sleep/wake)
-    const onContextLost = (e: Event) => {
-      e.preventDefault()
-      contextLost = true
+    function cleanupGL() {
       cancelAnimationFrame(raf)
+      raf = 0
+      if (gl) {
+        try {
+          gl.deleteTexture(texture)
+          gl.deleteProgram(program)
+        } catch { /* dead context — nothing to clean */ }
+      }
+      gl = null
+      program = null
+      texture = null
     }
-    canvas.addEventListener('webglcontextlost', onContextLost)
 
-    const img = new Image()
+    /** Re-entrant: builds (or rebuilds after context restore) all GL resources */
+    function buildGL() {
+      if (disposed) return
+      cleanupGL() // stale resources from the lost context
+      gl = (canvasRef.current!.getContext('webgl', { alpha: true, premultipliedAlpha: true }) ||
+        canvasRef.current!.getContext('experimental-webgl')) as WebGLRenderingContext | null
+      if (!gl || !img) return
 
-    function start() {
-      if (started || disposed) return
-      started = true
-      const c = canvas!
-      const g = gl!
+      const g = gl
       const w = img.naturalWidth || 1
       const h = img.naturalHeight || 1
       const scale = Math.min(size / w, size / h)
       const cw = Math.max(1, Math.round(w * scale))
       const ch = Math.max(1, Math.round(h * scale))
+      const c = canvasRef.current!
       c.width = cw
       c.height = ch
       c.style.width = `${cw}px`
@@ -135,7 +142,7 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
 
       const startTime = performance.now()
       const loop = (t: number) => {
-        if (disposed || contextLost) return
+        if (disposed || !gl || !program || !texture) return
         // Hidden (display:none / off-screen): skip drawing but keep polling cheaply
         if (!visible) {
           raf = requestAnimationFrame(loop)
@@ -154,17 +161,37 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
       raf = requestAnimationFrame(loop)
     }
 
+    // H2: context lifecycle — lost suspends rendering, restored rebuilds
+    // everything. AI/behavior/emotion state and window position are untouched.
+    const lifecycle = createRendererLifecycle({
+      init: buildGL,
+      suspend: () => {
+        cancelAnimationFrame(raf)
+        raf = 0
+      }
+    })
+    const onContextLost = (e: Event) => {
+      e.preventDefault()
+      lifecycle.handleContextLost()
+    }
+    const onContextRestored = () => lifecycle.handleContextRestored()
+    canvas.addEventListener('webglcontextlost', onContextLost)
+    canvas.addEventListener('webglcontextrestored', onContextRestored)
+
+    img = new Image()
+    img.onload = () => {
+      if (!disposed) lifecycle.init()
+    }
     img.src = url
-    if (img.complete) start()
-    else img.onload = () => { if (!disposed) start() }
+    if (img.complete) lifecycle.init()
 
     return () => {
       disposed = true
-      cancelAnimationFrame(raf)
+      cleanupGL()
+      lifecycle.dispose()
       observer.disconnect()
       canvas.removeEventListener('webglcontextlost', onContextLost)
-      if (texture) gl.deleteTexture(texture)
-      if (program) gl.deleteProgram(program)
+      canvas.removeEventListener('webglcontextrestored', onContextRestored)
     }
   }, [url, size])
 

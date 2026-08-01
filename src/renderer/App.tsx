@@ -8,6 +8,15 @@ import { PetView } from './views/PetView'
 import type { SpriteSource, ModelSource } from './components/avatar/modelTypes'
 import type { AvatarExpression } from './stores/avatarStore'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import {
+  reduceActivity,
+  LISTENING_MS,
+  THINKING_TIMEOUT_MS,
+  AFTER_SPEAK_MS,
+  ERROR_MS,
+  type CompanionActivity,
+  type ChatActivityEvent
+} from '../core/chatActivity'
 import './App.css'
 
 type Screen = 'wizard' | 'desktop'
@@ -26,6 +35,32 @@ export default function App() {
   const [mood, setMood] = useState('neutral')
   const [modelInfo, setModelInfo] = useState<{ provider: string; model: string; localModel: string | null }>({ provider: 'openai', model: '', localModel: null })
   const [lastRoute, setLastRoute] = useState<'local' | 'cloud' | null>(null)
+  const [activity, setActivity] = useState<CompanionActivity>('idle')
+
+  // M3: activity timers — the body only reflects the real pipeline, and it
+  // NEVER stays in thinking forever (slow model / network hang → recover)
+  useEffect(() => {
+    if (activity === 'listening') {
+      const t = setTimeout(() => setActivity(reduceActivity(activity, 'listen-timeout')), LISTENING_MS)
+      return () => clearTimeout(t)
+    }
+    if (activity === 'thinking') {
+      const t = setTimeout(() => setActivity(reduceActivity(activity, 'thinking-timeout')), THINKING_TIMEOUT_MS)
+      return () => clearTimeout(t)
+    }
+    if (activity === 'afterSpeak') {
+      const t = setTimeout(() => setActivity(reduceActivity(activity, 'after-speak-done')), AFTER_SPEAK_MS)
+      return () => clearTimeout(t)
+    }
+    if (activity === 'error') {
+      const t = setTimeout(() => setActivity(reduceActivity(activity, 'error-recovered')), ERROR_MS)
+      return () => clearTimeout(t)
+    }
+  }, [activity])
+
+  const transition = useCallback((event: ChatActivityEvent) => {
+    setActivity((prev) => reduceActivity(prev, event))
+  }, [])
 
   // Init
   useEffect(() => {
@@ -82,8 +117,15 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const u1 = window.inkAPI.onChatChunk((chunk) => appendAssistantChunk(chunk))
-    const u2 = window.inkAPI.onChatDone(() => { finishAssistantMessage(); setExpression('neutral') })
+    const u1 = window.inkAPI.onChatChunk((chunk) => {
+      appendAssistantChunk(chunk)
+      // First token arrives → the pet is speaking (body syncs with the stream)
+      transition('first-token')
+    })
+    const u2 = window.inkAPI.onChatDone(() => {
+      finishAssistantMessage(); setExpression('neutral')
+      transition('completed')
+    })
     const u3 = window.inkAPI.onNavigate((page: string) => {
       if (page === 'settings') { setScreen('desktop'); setMode('panel'); setPanel('settings') }
       if (page === 'chat') { setScreen('desktop'); setMode('panel'); setPanel('chat') }
@@ -91,7 +133,7 @@ export default function App() {
     const u4 = window.inkAPI.onPetExpression(({ expression: expr }) => setExpression(expr as AvatarExpression))
     const u5 = window.inkAPI.onPetMood(({ mood: m }) => setMood(m))
     return () => { u1(); u2(); u3(); u4(); u5() }
-  }, [])
+  }, [transition])
 
   const handlePetClick = useCallback(() => { window.inkAPI.setPanelMode(); setPanel('chat') }, [])
   const handlePetContextMenu = useCallback((e: React.MouseEvent) => { e.preventDefault(); window.inkAPI.showPetMenu() }, [])
@@ -99,6 +141,7 @@ export default function App() {
 
   const handleSend = useCallback(async (message: string) => {
     addUserMessage(message); setExpression('happy')
+    transition('user-sent') // idle → listening → thinking（身体开始"注意你"）
     try {
       const r = await window.inkAPI.chat(message)
       if (r.route === 'local' || r.route === 'cloud') setLastRoute(r.route)
@@ -108,10 +151,12 @@ export default function App() {
           : (r.error || '抱歉，我暂时无法回应...')
         appendAssistantChunk(msg)
         finishAssistantMessage(); setExpression('sad')
+        transition('failed')
       }
     } catch {
       appendAssistantChunk('\u62b1\u6b49\uff0c\u6211\u6682\u65f6\u65e0\u6cd5\u56de\u5e94...')
       finishAssistantMessage(); setExpression('sad')
+      transition('failed')
     }
   }, [])
 
@@ -144,7 +189,7 @@ export default function App() {
   if (mode === 'pet') {
     return (
       <div className="pet-mode-root">
-        <PetView modelSource={modelSource} expression={expression} mood={mood} onClick={handlePetClick} onContextMenu={handlePetContextMenu} />
+        <PetView modelSource={modelSource} expression={expression} mood={mood} activity={activity} onClick={handlePetClick} onContextMenu={handlePetContextMenu} />
       </div>
     )
   }
@@ -165,7 +210,7 @@ export default function App() {
       </div>
       <div className="main-content">
         <div style={{ display: panel === 'chat' ? 'flex' : 'none', height: '100%' }}>
-          <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onHeaderClick={handleBackToPet} />
+          <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} activity={activity} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onHeaderClick={handleBackToPet} active={panel === 'chat'} />
         </div>
         <div style={{ display: panel === 'settings' ? 'block' : 'none', height: '100%' }}>
           <ErrorBoundary>

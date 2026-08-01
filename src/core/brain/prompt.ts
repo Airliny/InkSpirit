@@ -3,23 +3,35 @@ import { PersonalityTraits } from '../soul/personality'
 import { EmotionState } from '../soul/emotion'
 import { RelationshipStage } from '../soul/relationship'
 import { getRecentMemories } from '../soul/memory'
-import { getConfig } from '../config'
+import { getPetName } from '../soul/identity'
 import type { PersonalityMode } from '../soul/mode'
 
-export interface PromptContext {
+export interface AgentContext {
   personalityTraits: PersonalityTraits
   emotionState: EmotionState
   relationshipStage: RelationshipStage
   currentTime: string
   mode: PersonalityMode
+  /** One-line world awareness from the World Model (null when nothing to say) */
+  situation?: string
 }
 
-export function buildSystemPrompt(ctx: PromptContext): ChatMessage {
+/**
+ * Unified agent context builder.
+ * Future layers (P2 relationship dimensions, memory digest, …) extend here
+ * so the prompt assembly stays a single source of truth.
+ */
+export function buildAgentContext(input: AgentContext): AgentContext {
+  return { ...input }
+}
+
+export function buildSystemPrompt(ctx: AgentContext): ChatMessage {
   const personality = buildPersona(ctx)
   const emotion = buildEmotionalTone(ctx.emotionState)
   const relation = buildRelationshipFeel(ctx.relationshipStage)
   const memories = buildMemoryContext()
   const mode = buildModeHint(ctx.mode)
+  const situation = ctx.situation ? `\n\n世界感知：${ctx.situation}` : ''
 
   const content = `${mode}
 
@@ -28,7 +40,7 @@ ${personality}
 ${emotion}
 
 ${relation}
-${memories}`
+${memories}${situation}`
 
   return { role: 'system', content }
 }
@@ -41,7 +53,7 @@ function buildModeHint(mode: PersonalityMode): string {
   return '你当前处于陪伴模式：回复自然、温暖，像朋友一样相处，可以闲聊、可以共情。'
 }
 
-function buildPersona(ctx: PromptContext): string {
+function buildPersona(ctx: AgentContext): string {
   const t = ctx.personalityTraits
 
   const personaTraits: string[] = []
@@ -61,10 +73,13 @@ function buildPersona(ctx: PromptContext): string {
     : '你是一个桌面伙伴，生活在用户的电脑里。'
 
   const timeHint = getTimeHint()
-  const petName = getConfig('pet_name')
-  const nameRules = petName
-    ? `用户给你起的名字是「${petName}」。这是用户送给你的名字，你发自内心地喜欢它，会自然地用这个名字称呼自己（比如「${petName}来啦」），也接受用户这样叫你。`
-    : `你现在还没有名字——如果用户给你起名字，你会认真地接受，并从此把它当作自己的名字。`
+  const petName = getPetName()
+  // 名字是用户赋予的，不是砚灵索取的：默认永远是「砚灵」，砚灵从不主动
+  // 请求命名、从不提醒、从不安排命名任务。只有用户主动赋予新名字时才改变。
+  // 名字是身份标签，不是人格开关：换名字绝不改变性格、记忆或关系。
+  const nameRules = petName !== '砚灵'
+    ? `用户给你起的名字是「${petName}」。名字只是用户对你的称呼，它不改变你是谁——你的性格、记忆和你们的关系都不会因名字而变。你自然地用它称呼自己，也接受用户这样叫你。`
+    : `你的名字是「砚灵」，这是你一直以来的名字。名字只是用户对你的称呼，它不改变你是谁——你的性格、记忆和你们的关系都不会因名字而变。你自然地用它称呼自己，也接受用户这样叫你。`
 
   return `${traitStr} ${nameRules} ${timeHint}`
 }

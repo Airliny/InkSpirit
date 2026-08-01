@@ -38,8 +38,22 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [soulState, setSoulState] = useState<any>(null)
   const [personalityMode, setPersonalityMode] = useState('auto')
   const [currentMode, setCurrentMode] = useState('')
+  const [restoreReport, setRestoreReport] = useState<any>(null)
   const [petName, setPetName] = useState('')
   const [storageInfo, setStorageInfo] = useState<any>(null)
+
+  useEffect(() => {
+    // Restore report from the last data:import — "the soul came back"
+    window.inkAPI.getConfig('restore_report').then((raw) => {
+      if (!raw) return
+      try {
+        setRestoreReport(JSON.parse(raw))
+        window.inkAPI.setConfig('restore_report', '')
+      } catch {
+        // unreadable report — drop it silently
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -290,7 +304,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
         {soulState ? (
           <div style={{ fontSize: 12, lineHeight: 1.8 }}>
             <div style={{ color: 'var(--text-secondary)' }}>
-              名字：<span style={{ fontWeight: 600 }}>{petName || '未命名（跟它说"给你起个名字叫XX"）'}</span>
+              名字：<span style={{ fontWeight: 600 }}>{petName || '砚灵'}</span>
                ｜ 关系：<span style={{ fontWeight: 600 }}>{stageLabel(soulState.relationshipStage)}</span>
                ｜ 主导情绪：<span style={{ fontWeight: 600 }}>{emotionLabel(soulState.emotion?.dominantEmotion)}</span>
             </div>
@@ -598,6 +612,18 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           </button>
         </div>
         {dataMsg && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>{dataMsg}</div>}
+        {restoreReport && (
+          <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: 'rgba(76, 175, 80, 0.12)', border: '1px solid rgba(76, 175, 80, 0.35)', fontSize: 12, lineHeight: 1.7 }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>砚灵恢复成功，它回来了。</div>
+            <div>人格：✓ 已恢复（版本 {restoreReport.personalities > 0 ? '已加载' : '默认'}）｜ 进化记录 {restoreReport.evolutionLogs} 条</div>
+            <div>关系：✓ 已恢复 ｜ 关系变化史 {restoreReport.relationshipLogs} 条</div>
+            <div>记忆：✓ {restoreReport.memories} 条</div>
+            <div>日常节奏：{restoreReport.dailyPatterns} 条 ｜ 行为历史：{restoreReport.behaviorLogs} 条</div>
+            {restoreReport.skippedUnknown?.length > 0 && (
+              <div style={{ color: 'var(--yellow)' }}>注意：{restoreReport.skippedUnknown.join('、')} 存在无法识别的内容，已跳过</div>
+            )}
+          </div>
+        )}
       </div>
 
 
