@@ -41,19 +41,6 @@ pnpm install
 pnpm dev
 ```
 
-## 打包发布
-
-```bash
-# 1. 修改 package.json 的 version
-# 2. 打安装包（Linux 交叉编译需要 wine32 + xvfb）
-WINEARCH=win32 WINEPREFIX=/tmp/wine32-pfx xvfb-run -a pnpm build && xvfb-run -a npx electron-builder --win --x64
-
-# 3. 发布到 GitHub Releases（自动更新源）
-GH_TOKEN=ghp_xxx npm run publish:release
-```
-
-产物：`dist/InkSpirit-Setup-<version>.exe`（NSIS 安装包，可选安装目录、创建快捷方式）
-
 ## 项目结构
 
 ```
