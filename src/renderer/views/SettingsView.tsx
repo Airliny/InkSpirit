@@ -33,6 +33,8 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [routerLocalModel, setRouterLocalModel] = useState<string | null>(null)
   const [budgetInput, setBudgetInput] = useState('0')
   const [costSummary, setCostSummary] = useState<any>(null)
+  const [autoLaunch, setAutoLaunch] = useState(false)
+  const [dataMsg, setDataMsg] = useState('')
 
   useEffect(() => {
     window.inkAPI.getConfig('provider').then(v => { if (v) setProvider(v) })
@@ -60,6 +62,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     })
     refreshOllama()
     refreshCost()
+    window.inkAPI.getAutoLaunch().then(setAutoLaunch)
     return () => { u1(); u2(); u3() }
   }, [])
 
@@ -77,6 +80,18 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   async function handleSaveBudget() {
     await window.inkAPI.setCostBudget(Number(budgetInput) || 0)
     refreshCost()
+  }
+
+  async function handleExport() {
+    const r = await window.inkAPI.exportData()
+    setDataMsg(r.success ? '备份已保存' : (r.error || '导出失败'))
+    setTimeout(() => setDataMsg(''), 3000)
+  }
+
+  async function handleImport() {
+    const r = await window.inkAPI.importData()
+    setDataMsg(r.success ? '数据已恢复' : (r.error || '导入失败'))
+    setTimeout(() => setDataMsg(''), 3000)
   }
 
   async function refreshOllama() {
@@ -191,6 +206,18 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
       <div className="settings-section">
         <h4>陪伴提醒</h4>
         <div className="settings-form">
+          <label style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>开机自动启动</span>
+            <input
+              type="checkbox"
+              checked={autoLaunch}
+              onChange={async e => {
+                setAutoLaunch(e.target.checked)
+                await window.inkAPI.setAutoLaunch(e.target.checked)
+              }}
+              style={{ width: 18, height: 18 }}
+            />
+          </label>
           <label style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>主动提醒</span>
             <input
@@ -413,6 +440,15 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           </label>
           <button className="settings-save-btn" onClick={handleSaveAI}>{saved ? '已保存' : '保存设置'}</button>
         </div>
+      </div>
+
+      <div className="settings-section">
+        <h4>数据管理</h4>
+        <div className="settings-form" style={{ flexDirection: 'row', gap: 8 }}>
+          <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleExport}>备份数据</button>
+          <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleImport}>恢复数据</button>
+        </div>
+        {dataMsg && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>{dataMsg}</div>}
       </div>
 
       <button className="settings-back-btn" onClick={onBack}>返回</button>

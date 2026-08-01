@@ -1,5 +1,6 @@
-import { ipcMain } from 'electron'
+import { ipcMain, app } from 'electron'
 import { getMainWindow, toggleAlwaysOnTop, setPetMode, setPanelMode, toggleMode, moveWindowBy, moveWindowTo, startWindowDrag, updateWindowDrag, endWindowDrag } from '../windowManager'
+import { showPetContextMenu } from '../trayManager'
 
 export function registerSystemHandlers(): void {
   ipcMain.handle('window:minimize', () => {
@@ -45,5 +46,18 @@ export function registerSystemHandlers(): void {
 
   ipcMain.handle('window:endDrag', () => {
     endWindowDrag()
+  })
+
+  ipcMain.handle('window:setAutoLaunch', (_event, enabled: boolean) => {
+    app.setLoginItemSettings({ openAtLogin: !!enabled })
+    return app.getLoginItemSettings().openAtLogin
+  })
+
+  ipcMain.handle('window:getAutoLaunch', () => {
+    return app.getLoginItemSettings().openAtLogin
+  })
+
+  ipcMain.handle('window:showPetMenu', () => {
+    showPetContextMenu()
   })
 }

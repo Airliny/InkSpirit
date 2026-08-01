@@ -5,7 +5,6 @@ import { ChatView } from './views/ChatView'
 import { SettingsView } from './views/SettingsView'
 import { WizardView } from './views/WizardView'
 import { PetView } from './views/PetView'
-import { useIdleBehavior } from './hooks/useIdleBehavior'
 import type { SpriteSource, ModelSource } from './components/avatar/modelTypes'
 import type { AvatarExpression } from './stores/avatarStore'
 import './App.css'
@@ -23,10 +22,7 @@ export default function App() {
     messages, isStreaming, addUserMessage, appendAssistantChunk, finishAssistantMessage
   } = useChatStore()
   const { expression, setExpression } = useAvatarStore()
-  const [soulEnergy, setSoulEnergy] = useState(0.8)
-  const [soulAttachment, setSoulAttachment] = useState(0.3)
   const [mood, setMood] = useState('neutral')
-  const idleState = useIdleBehavior(soulEnergy, soulAttachment)
 
   // Init
   useEffect(() => {
@@ -78,12 +74,11 @@ export default function App() {
     })
     const u4 = window.inkAPI.onPetExpression(({ expression: expr }) => setExpression(expr as AvatarExpression))
     const u5 = window.inkAPI.onPetMood(({ mood: m }) => setMood(m))
-    const u6 = window.inkAPI.onPetSoul(({ energy, attachment }) => { setSoulEnergy(energy); setSoulAttachment(attachment) })
-    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
+    return () => { u1(); u2(); u3(); u4(); u5() }
   }, [])
 
   const handlePetClick = useCallback(() => { window.inkAPI.setPanelMode(); setPanel('chat') }, [])
-  const handlePetContextMenu = useCallback((e: React.MouseEvent) => { e.preventDefault(); window.inkAPI.setPanelMode(); setPanel('chat') }, [])
+  const handlePetContextMenu = useCallback((e: React.MouseEvent) => { e.preventDefault(); window.inkAPI.showPetMenu() }, [])
   const handleBackToPet = useCallback(() => { window.inkAPI.setPetMode() }, [])
 
   const handleSend = useCallback(async (message: string) => {
@@ -129,13 +124,13 @@ export default function App() {
   if (mode === 'pet') {
     return (
       <div className="pet-mode-root">
-        <PetView modelSource={modelSource} state={idleState} expression={expression} mood={mood} onClick={handlePetClick} onContextMenu={handlePetContextMenu} />
+        <PetView modelSource={modelSource} expression={expression} mood={mood} onClick={handlePetClick} onContextMenu={handlePetContextMenu} />
       </div>
     )
   }
 
   const exprToState: Record<string, string> = { neutral: 'idle', happy: 'happy', sad: 'sad', surprised: 'surprised', love: 'love' }
-  const panelState = panel === 'chat' ? (exprToState[expression] ?? 'idle') : idleState
+  const panelState = panel === 'chat' ? (exprToState[expression] ?? 'idle') : 'idle'
 
   return (
     <div className="app-container">

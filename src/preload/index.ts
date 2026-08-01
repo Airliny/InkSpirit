@@ -19,6 +19,9 @@ const api = {
   startWindowDrag: () => ipcRenderer.invoke('window:startDrag'),
   updateWindowDrag: () => ipcRenderer.invoke('window:updateDrag'),
   endWindowDrag: () => ipcRenderer.invoke('window:endDrag'),
+  setAutoLaunch: (enabled: boolean) => ipcRenderer.invoke('window:setAutoLaunch', enabled),
+  getAutoLaunch: () => ipcRenderer.invoke('window:getAutoLaunch'),
+  showPetMenu: () => ipcRenderer.invoke('window:showPetMenu'),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   toggleAlwaysOnTop: () => ipcRenderer.invoke('window:toggleAlwaysOnTop'),
 
@@ -31,6 +34,8 @@ const api = {
   getModelType: () => ipcRenderer.invoke('model:getType'),
   getLive2DPath: () => ipcRenderer.invoke('model:getLive2DPath'),
   hasModel: () => ipcRenderer.invoke('model:hasModel'),
+  exportData: () => ipcRenderer.invoke('data:export'),
+  importData: () => ipcRenderer.invoke('data:import'),
 
   // Chat events
   onChatChunk: (cb: (chunk: string) => void) => {

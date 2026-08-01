@@ -19,23 +19,19 @@ const EXPR_TO_STATE: Record<string, AnimationState> = {
 
 interface PetViewProps {
   modelSource: ModelSource
-  state: AnimationState
   expression?: AvatarExpression
   mood?: string
   onClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
 }
 
-export function PetView({ modelSource, state, expression, mood, onClick, onContextMenu }: PetViewProps) {
-  const [bubbles, setBubbles] = useState<Bubble[]>([])
-  const [currentState, setCurrentState] = useState<AnimationState>(state)
+export function PetView({ modelSource, expression, mood, onClick, onContextMenu }: PetViewProps) {  const [bubbles, setBubbles] = useState<Bubble[]>([])
+  const [currentState, setCurrentState] = useState<AnimationState>('idle')
   const [override, setOverride] = useState<AnimationState | null>(null)
   const walkRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const overrideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragging = useRef(false)
   const startPos = useRef({ x: 0, y: 0 })
-
-  useEffect(() => { setCurrentState(state) }, [state])
 
   // Emotional expression overrides behavior briefly, then fades back
   useEffect(() => {
@@ -74,10 +70,8 @@ export function PetView({ modelSource, state, expression, mood, onClick, onConte
     })
     const u2 = window.inkAPI.onPetSpeak(({ message }) => showBubble(message, 'speak'))
     const u3 = window.inkAPI.onPetThought(({ thought }) => showBubble(thought, 'thought'))
-    const u4 = window.inkAPI.onPetExpression(({ expression: expr }) => {})
-    const u5 = window.inkAPI.onPetMood(({ mood: m }) => {})
-    const u6 = window.inkAPI.onPetUserReturned(() => {})
-    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
+    const u4 = window.inkAPI.onPetUserReturned(() => {})
+    return () => { u1(); u2(); u3(); u4() }
   }, [showBubble])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {

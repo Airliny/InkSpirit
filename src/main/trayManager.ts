@@ -5,6 +5,39 @@ import { join } from 'path'
 
 let tray: Tray | null = null
 
+function openPanel(page: 'chat' | 'settings'): void {
+  const win = getMainWindow()
+  if (win) { win.show(); win.focus() }
+  setPanelMode()
+  const w = getMainWindow()
+  if (w) w.webContents.send('navigate', page)
+}
+
+/** Native context menu shown when right-clicking the pet */
+export function showPetContextMenu(): void {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: '聊天',
+      click: () => openPanel('chat')
+    },
+    {
+      label: '设置',
+      click: () => openPanel('settings')
+    },
+    { type: 'separator' },
+    {
+      label: '隐藏伙伴',
+      click: () => toggleVisibility()
+    },
+    { type: 'separator' },
+    {
+      label: '退出 InkSpirit',
+      click: () => app.quit()
+    }
+  ])
+  menu.popup({ window: getMainWindow() ?? undefined })
+}
+
 export function createTray(mainWindow: BrowserWindow): void {
   let icon: Electron.NativeImage
   try {
@@ -27,11 +60,7 @@ export function createTray(mainWindow: BrowserWindow): void {
     {
       label: '切换面板模式',
       click: () => {
-        const win = getMainWindow()
-        if (win) { win.show(); win.focus() }
-        setPanelMode()
-        const w = getMainWindow()
-        if (w) w.webContents.send('navigate', 'chat')
+        openPanel('chat')
       }
     },
     {
@@ -47,13 +76,7 @@ export function createTray(mainWindow: BrowserWindow): void {
     {
       label: '设置',
       click: () => {
-        const win = getMainWindow()
-        if (win) {
-          win.show()
-          win.focus()
-          setPanelMode()
-          win.webContents.send('navigate', 'settings')
-        }
+        openPanel('settings')
       }
     },
     { type: 'separator' },

@@ -27,6 +27,9 @@ declare global {
       endWindowDrag: () => Promise<void>
       minimizeWindow: () => void
       toggleAlwaysOnTop: () => Promise<boolean>
+      setAutoLaunch: (enabled: boolean) => Promise<boolean>
+      getAutoLaunch: () => Promise<boolean>
+      showPetMenu: () => Promise<void>
 
       // Model
       importModel: (spriteKey: string) => Promise<{ success: boolean; path?: string; error?: string }>
@@ -36,6 +39,8 @@ declare global {
       getModelType: () => Promise<string>
       getLive2DPath: () => Promise<string | null>
       hasModel: () => Promise<boolean>
+      exportData: () => Promise<{ success: boolean; filePath?: string; error?: string }>
+      importData: () => Promise<{ success: boolean; filePath?: string; error?: string }>
 
       // Chat events
       onChatChunk: (callback: (chunk: string) => void) => () => void

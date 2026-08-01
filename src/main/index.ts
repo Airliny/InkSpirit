@@ -98,6 +98,10 @@ function startHeartbeat(): void {
 
     if (impulse.type !== 'none') {
       actOnImpulse(impulse)
+    } else {
+      // No strong drive right now: emit a natural idle behavior as the single
+      // source of animation state, weighted by current energy
+      emitIdleBehavior()
     }
 
     // Forgiveness and emotional decay over time
@@ -106,6 +110,28 @@ function startHeartbeat(): void {
       applyEmotionDecay()
     }
   }, tickRate)
+}
+
+// Single behavior source for the renderer: idle actions weighted by soul energy
+function emitIdleBehavior(): void {
+  const emotion = getCurrentEmotion()
+  const rand = Math.random()
+
+  if (emotion.energy < 0.3) {
+    const pool = ['sit', 'yawn', 'blink', 'sit', 'sleep']
+    emit('pet:behavior', { behavior: pool[Math.floor(Math.random() * pool.length)] })
+  } else if (emotion.energy > 0.7) {
+    const pool = ['stretch', 'walk', 'look_around', 'stretch']
+    emit('pet:behavior', { behavior: pool[Math.floor(Math.random() * pool.length)] })
+  } else if (rand < 0.4) {
+    emit('pet:behavior', { behavior: 'blink' })
+  } else if (rand < 0.6) {
+    emit('pet:behavior', { behavior: 'look_around' })
+  } else if (rand < 0.8) {
+    emit('pet:behavior', { behavior: 'idle' })
+  } else {
+    emit('pet:behavior', { behavior: 'stretch' })
+  }
 }
 
 function actOnImpulse(impulse: BehaviorImpulse): void {
