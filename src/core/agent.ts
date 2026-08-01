@@ -157,7 +157,6 @@ export class Agent {
       ? ['（转过身去，不理你）', '（沉默）']
       : ['...', '（没有看你）', '嗯。']
     const msg = responses[Math.floor(Math.random() * responses.length)]
-    this.conversationHistory.push({ role: 'user', content: '' })
     this.conversationHistory.push({ role: 'assistant', content: msg })
     yield msg
   }

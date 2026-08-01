@@ -90,7 +90,6 @@ function pick(list: string[]): string {
 
 function pickMessage(streakMin: number, hour: number, dominantEmotion: string): string {
   const lateNight = hour >= 22 || hour < 6
-
   if (lateNight) {
     return pick([
       '这么晚了还在忙吗…我有点担心你。',

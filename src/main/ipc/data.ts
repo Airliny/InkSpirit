@@ -114,11 +114,6 @@ export function registerDataHandlers(): void {
 
   // Check if any model is configured
   ipcMain.handle('model:hasModel', () => {
-    return getConfig('sprite_idle') !== null
-  })
-
-  // Check if any model is configured
-  ipcMain.handle('model:hasModel', () => {
     return getConfig('live2d_path') !== null || getConfig('sprite_idle') !== null
   })
 
@@ -132,7 +127,7 @@ export function registerDataHandlers(): void {
     return getConfig('live2d_path')
   })
 
-  // Data export
+  // Data export: dump all tables to a JSON file
   ipcMain.handle('data:export', async () => {
     const result = await dialog.showSaveDialog({
       filters: [{ name: 'InkSpirit Data', extensions: ['inkdata'] }]
@@ -158,16 +153,61 @@ export function registerDataHandlers(): void {
         dump[table] = []
       }
     }
-    return { success: true, filePath: result.filePath }
+    try {
+      fs.writeFileSync(result.filePath, JSON.stringify({ app: 'inkspirit', version: 1, data: dump }), 'utf8')
+      return { success: true, filePath: result.filePath }
+    } catch (e: any) {
+      return { success: false, error: e?.message || '写入失败' }
+    }
   })
 
-  // Data import
+  // Data import: read a JSON dump and replace table contents
   ipcMain.handle('data:import', async () => {
     const result = await dialog.showOpenDialog({
       filters: [{ name: 'InkSpirit Data', extensions: ['inkdata'] }]
     })
     if (result.canceled || result.filePaths.length === 0) return { success: false, error: 'Cancelled' }
-    return { success: true, filePath: result.filePaths[0] }
+
+    const filePath = result.filePaths[0]
+    try {
+      const raw = fs.readFileSync(filePath, 'utf8')
+      const parsed = JSON.parse(raw) as { app?: string; version?: number; data: Record<string, unknown[]> }
+      if (parsed.app !== 'inkspirit' || !parsed.data) {
+        return { success: false, error: '无效的备份文件' }
+      }
+
+      const db = getDatabase()
+      const tables: { name: string; columns: string[] }[] = [
+        { name: 'config', columns: ['key', 'value', 'updated_at'] },
+        { name: 'conversations', columns: ['id', 'messages_json', 'summary', 'created_at'] },
+        { name: 'emotion_snapshots', columns: ['id', 'state_json', 'timestamp'] },
+        { name: 'personalities', columns: ['id', 'version', 'is_active', 'traits_json', 'created_at'] },
+        { name: 'relationships', columns: ['user_id', 'trust', 'familiarity', 'affection', 'interaction_count', 'stage', 'first_interaction_at', 'last_interaction_at'] },
+        { name: 'memories', columns: ['id', 'type', 'tier', 'content', 'summary', 'importance', 'emotional_valence', 'emotional_intensity', 'access_count', 'last_accessed_at', 'created_at', 'retention_score', 'decay_rate', 'tags', 'related_memory_ids', 'source_conversation_id'] },
+        { name: 'behavior_logs', columns: ['id', 'behavior_id', 'triggered_by', 'outcome', 'timestamp'] }
+      ]
+
+      db.exec('BEGIN TRANSACTION')
+      try {
+        for (const table of tables) {
+          db.prepare(`DELETE FROM ${table.name}`).run()
+          const rows = (parsed.data[table.name] ?? []) as Record<string, unknown>[]
+          const insert = db.prepare(
+            `INSERT INTO ${table.name} (${table.columns.join(', ')}) VALUES (${table.columns.map(() => '?').join(', ')})`
+          )
+          for (const row of rows) {
+            insert.run(...table.columns.map(c => row[c] ?? null))
+          }
+        }
+        db.exec('COMMIT')
+      } catch (e) {
+        db.exec('ROLLBACK')
+        throw e
+      }
+      return { success: true, filePath }
+    } catch (e: any) {
+      return { success: false, error: e?.message || '导入失败' }
+    }
   })
 }
 

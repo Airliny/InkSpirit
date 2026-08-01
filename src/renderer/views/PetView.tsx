@@ -52,6 +52,7 @@ export function PetView({ modelSource, state, expression, mood, onClick, onConte
   useEffect(() => {
     if (currentState === 'walk') {
       walkRef.current = setInterval(() => {
+        if (dragging.current) return
         window.inkAPI.moveWindowBy(Math.round((Math.random() - 0.5) * 14), Math.round((Math.random() - 0.5) * 6))
       }, 200)
     } else {
@@ -98,7 +99,8 @@ export function PetView({ modelSource, state, expression, mood, onClick, onConte
     }
   }, [])
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    if (e.button === 2) { dragging.current = false; return }
     if (!dragging.current) {
       onClick()
     }

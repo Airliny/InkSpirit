@@ -52,11 +52,13 @@ export function useIdleBehavior(
   }, [energy, attachment])
 
   useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    idleMinutesRef.current = 0
     scheduleNext()
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [])
+  }, [scheduleNext])
 
   return state
 }

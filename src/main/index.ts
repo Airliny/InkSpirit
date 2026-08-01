@@ -1,10 +1,9 @@
-import { app, BrowserWindow, protocol, net } from 'electron'
+import { app, BrowserWindow, protocol, net, powerMonitor } from 'electron'
 import { createMainWindow, getMainWindow } from './windowManager'
 import { createTray } from './trayManager'
 import { registerIpcHandlers } from './ipc/index'
 import { getDatabase, closeDatabase } from '../core/database'
 import { Agent } from '../core/agent'
-import { startActivityMonitor } from './perception'
 import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTracker'
 import { startGuardian } from './guardian/guardian'
 import { initUpdater } from './updater/updater'
@@ -50,11 +49,34 @@ app.on('before-quit', () => {
 })
 
 function startPerception(): void {
-  startActivityMonitor(
-    () => { userIdleMs = 0; markActive() },
-    (idleMs) => { userIdleMs = idleMs; markIdle(); totalWorkMin = getTotalWorkMinutes() },
-    30000
-  )
+  // Real activity detection via OS-level idle time (powerMonitor)
+  const IDLE_THRESHOLD_MS = 45000
+  let wasIdle = true
+
+  const update = () => {
+    const idleSec = powerMonitor.getSystemIdleTime()
+    const idleMs = idleSec * 1000
+    const isIdle = idleMs >= IDLE_THRESHOLD_MS
+
+    if (isIdle && !wasIdle) {
+      wasIdle = true
+      markIdle()
+      userIdleMs = idleMs
+      totalWorkMin = getTotalWorkMinutes()
+    } else if (!isIdle) {
+      if (wasIdle) {
+        wasIdle = false
+        markActive()
+      }
+      userIdleMs = 0
+      totalWorkMin = getTotalWorkMinutes()
+    } else {
+      userIdleMs = idleMs
+    }
+  }
+
+  update()
+  setInterval(update, 10000)
   setInterval(() => { totalWorkMin = getTotalWorkMinutes() }, 60000)
 }
 

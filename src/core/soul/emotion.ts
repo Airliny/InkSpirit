@@ -34,6 +34,7 @@ export interface EmotionState {
   jealousy: number
   anxiety: number
   confidence: number
+  loneliness: number
   valence: number
   arousal: number
   dominantEmotion: EmotionType
@@ -55,6 +56,7 @@ export const DEFAULT_EMOTION: EmotionState = {
   jealousy: 0.05,
   anxiety: 0.1,
   confidence: 0.5,
+  loneliness: 0,
   valence: 0.3,
   arousal: 0.45,
   dominantEmotion: 'neutral',
@@ -108,7 +110,7 @@ export function feelLonely(durationMinutes: number = 60): EmotionState {
   const updated: EmotionState = {
     ...current,
     sadness: Math.min(1, current.sadness + factor * 0.15),
-    loneliness: Math.min(1, (current as any).loneliness ?? 0 + factor * 0.2),
+    loneliness: Math.min(1, (current.loneliness ?? 0) + factor * 0.2),
     attachment: Math.min(1, current.attachment + factor * 0.05), // paradoxically, absence makes heart grow fonder
     energy: Math.max(0, current.energy - factor * 0.15),
     timestamp: Date.now()
@@ -216,6 +218,7 @@ export function applyEmotionDecay(): EmotionState {
     sadness: Math.max(0, current.sadness - decay * 0.08),
     jealousy: Math.max(0, current.jealousy - decay * 0.04),
     anxiety: Math.max(0, current.anxiety - decay * 0.06),
+    loneliness: Math.max(0, current.loneliness - decay * 0.15),
     grudge: Math.max(0, current.grudge - 0.0003 * elapsed),
     energy: Math.max(0, current.energy - decay * 0.2),
     arousal: Math.max(0, current.arousal - decay * 0.15),
@@ -236,14 +239,14 @@ function recomputeDominant(state: EmotionState): void {
     ['anxious', state.anxiety * 0.85],
     ['sad', state.sadness * 0.8],
     ['hurt', state.grudge * 0.5 + state.sadness * 0.5],
-    ['disappointed', state.sadness * 0.4 + state.valence < 0 ? 0.4 : 0],
+    ['disappointed', state.sadness * 0.4 + (state.valence < 0 ? 0.4 : 0)],
     ['excited', state.happiness * 0.6 + state.arousal * 0.4],
     ['happy', state.happiness * 0.7],
     ['playful', state.energy * 0.6 + state.happiness * 0.4],
     ['proud', state.confidence * 0.7 + state.happiness * 0.3],
     ['curious', state.curiosity * 0.8],
     ['concerned', state.concern * 0.8],
-    ['lonely', Math.max(0, (state as any).loneliness ?? 0) * 0.8 + state.sadness * 0.2],
+    ['lonely', state.loneliness * 0.8 + state.sadness * 0.2],
     ['tired', (1 - state.energy) * 0.8],
     ['shy', (1 - state.confidence) * 0.5 + state.arousal * 0.3],
     ['calm', (1 - state.arousal) * 0.7],
@@ -261,6 +264,9 @@ function saveEmotionSnapshot(state: EmotionState): void {
   db.prepare(
     'INSERT INTO emotion_snapshots (id, state_json, timestamp) VALUES (?, ?, ?)'
   ).run(uuidv4(), JSON.stringify(state), Date.now())
+  // Keep the table bounded: retain 7 days of history, then prune older rows
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  db.prepare('DELETE FROM emotion_snapshots WHERE timestamp < ?').run(cutoff)
 }
 
 export function emotionToExpression(emotion: EmotionType): string {

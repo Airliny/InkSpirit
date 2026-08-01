@@ -95,7 +95,6 @@ export async function searchCatalog(): Promise<{
   hardware: HardwareInfo
 }> {
   const [installed, hardware] = await Promise.all([listModels(), getHardwareInfo()])
-  const installedNames = new Set(installed.map(m => m.name))
 
   // 推荐：在"可运行"的模型里，按参数量降序，选显存档位最匹配的 1-2 个
   const feasibleModels = MODEL_CATALOG.filter(m => checkModelFeasible(m, hardware).ok)
