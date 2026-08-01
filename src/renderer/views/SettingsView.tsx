@@ -345,9 +345,13 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
               className="settings-sprite-btn"
               onClick={async () => {
                 await window.inkAPI.setConfig('model_type', 'sprites')
-                onModelSourceChange({ type: 'sprites', sprites: {} })
+                // Load any previously imported sprites instead of an empty set
+                const updated = await window.inkAPI.getModelSprites()
+                const sprites: SpriteSource = {}
+                for (const [k, v] of Object.entries(updated)) { if (v) (sprites as any)[k] = v }
+                onModelSourceChange({ type: 'sprites', sprites })
               }}
-              style={{ color: 'var(--orange)' }}
+              style={{ color: 'var(--accent)' }}
             >
               切换为精灵图模式
             </button>
