@@ -4,12 +4,14 @@ import { EmotionState } from '../soul/emotion'
 import { RelationshipStage } from '../soul/relationship'
 import { getRecentMemories } from '../soul/memory'
 import { getConfig } from '../config'
+import type { PersonalityMode } from '../soul/mode'
 
 export interface PromptContext {
   personalityTraits: PersonalityTraits
   emotionState: EmotionState
   relationshipStage: RelationshipStage
   currentTime: string
+  mode: PersonalityMode
 }
 
 export function buildSystemPrompt(ctx: PromptContext): ChatMessage {
@@ -17,7 +19,7 @@ export function buildSystemPrompt(ctx: PromptContext): ChatMessage {
   const emotion = buildEmotionalTone(ctx.emotionState)
   const relation = buildRelationshipFeel(ctx.relationshipStage)
   const memories = buildMemoryContext()
-  const mode = buildModeHint()
+  const mode = buildModeHint(ctx.mode)
 
   const content = `${mode}
 
@@ -31,9 +33,8 @@ ${memories}`
   return { role: 'system', content }
 }
 
-/** 双模态：陪伴模式（温暖自然）/ 专业模式（简洁高效），由设置切换 */
-function buildModeHint(): string {
-  const mode = getConfig('personality_mode') === 'professional' ? 'professional' : 'companion'
+/** 双模态：陪伴模式（温暖自然）/ 专业模式（简洁高效），可自动判定或手动指定 */
+function buildModeHint(mode: PersonalityMode): string {
   if (mode === 'professional') {
     return '你当前处于专业模式：回复简洁、直接、高效，优先解决问题本身，少寒暄、少修饰、不啰嗦。用户需要的是答案和方案，不是聊天。'
   }

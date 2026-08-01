@@ -10,6 +10,7 @@ import {
 } from './soul/emotion'
 import { getRelationship, recordInteraction } from './soul/relationship'
 import { addMemory } from './soul/memory'
+import { decideMode, type PersonalityMode } from './soul/mode'
 import { getDatabase } from './database'
 import { getConfig, setConfig } from './config'
 import { setSecureConfig, getSecureConfig } from './secureStore'
@@ -244,11 +245,21 @@ export class Agent {
     const emotion = getCurrentEmotion()
     const relationship = getRelationship()
 
+    // Dual mode: auto-detect per message (model-assisted), or use manual setting
+    const modeSetting = getConfig('personality_mode') || 'auto'
+    const mode: PersonalityMode = modeSetting === 'auto'
+      ? await decideMode(this.localClient ?? client, userMessage)
+      : (modeSetting === 'professional' ? 'professional' : 'companion')
+    if (modeSetting === 'auto') {
+      setConfig('personality_mode_current', mode)
+    }
+
     const ctx: PromptContext = {
       personalityTraits: personality.traits,
       emotionState: emotion,
       relationshipStage: relationship.stage,
-      currentTime: new Date().toISOString()
+      currentTime: new Date().toISOString(),
+      mode
     }
 
     const systemMsg = buildSystemPrompt(ctx)

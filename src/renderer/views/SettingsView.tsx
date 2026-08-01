@@ -36,7 +36,8 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [autoLaunch, setAutoLaunch] = useState(false)
   const [dataMsg, setDataMsg] = useState('')
   const [soulState, setSoulState] = useState<any>(null)
-  const [personalityMode, setPersonalityMode] = useState('companion')
+  const [personalityMode, setPersonalityMode] = useState('auto')
+  const [currentMode, setCurrentMode] = useState('')
   const [petName, setPetName] = useState('')
   const [storageInfo, setStorageInfo] = useState<any>(null)
 
@@ -82,6 +83,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     window.inkAPI.getAgentState().then(setSoulState)
     window.inkAPI.getStorageInfo().then(setStorageInfo)
     window.inkAPI.getConfig('personality_mode').then(v => { if (v) setPersonalityMode(v) })
+    window.inkAPI.getConfig('personality_mode_current').then(v => { if (v) setCurrentMode(v) })
     window.inkAPI.getConfig('pet_name').then(v => { if (v) setPetName(v) })
     return () => { u1(); u2(); u3() }
   }, [])
@@ -237,8 +239,25 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
       <div className="settings-section">
         <h4>灵魂状态</h4>
         <div className="settings-form" style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>人格模式</div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            人格模式
+            {personalityMode === 'auto' && currentMode && (
+              <span style={{ color: 'var(--accent)', marginLeft: 6 }}>
+                当前自动判定：{currentMode === 'professional' ? '专业' : '陪伴'}
+              </span>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="settings-save-btn"
+              style={{ flex: 1, background: personalityMode === 'auto' ? 'var(--accent)' : 'var(--bg-tertiary)', color: personalityMode === 'auto' ? '#fff' : 'var(--text-primary)' }}
+              onClick={async () => {
+                setPersonalityMode('auto')
+                await window.inkAPI.setConfig('personality_mode', 'auto')
+              }}
+            >
+              自动切换
+            </button>
             <button
               className="settings-save-btn"
               style={{ flex: 1, background: personalityMode === 'companion' ? 'var(--accent)' : 'var(--bg-tertiary)', color: personalityMode === 'companion' ? '#fff' : 'var(--text-primary)' }}
@@ -247,7 +266,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
                 await window.inkAPI.setConfig('personality_mode', 'companion')
               }}
             >
-              陪伴模式
+              陪伴
             </button>
             <button
               className="settings-save-btn"
@@ -257,9 +276,14 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
                 await window.inkAPI.setConfig('personality_mode', 'professional')
               }}
             >
-              专业模式
+              专业
             </button>
           </div>
+          {personalityMode === 'auto' && (
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+              自动模式：任务型问题（代码/分析/方案）自动切专业，闲聊自动切陪伴；识别不准可手动指定
+            </div>
+          )}
         </div>
         {soulState ? (
           <div style={{ fontSize: 12, lineHeight: 1.8 }}>
