@@ -15,7 +15,7 @@ import { getConfig, setConfig } from './config'
 import { setSecureConfig, getSecureConfig } from './secureStore'
 import { uuidv4 } from './utils'
 import { recordUsage } from './cost/usage'
-import { checkText, refusalMessage, type ViolationLevel } from './safety/policy'
+import { detectUnsafe, refusalMessage, type ViolationLevel } from './safety/policy'
 import { tryEvolvePersonality } from './soul/personality'
 
 export class Agent {
@@ -173,8 +173,8 @@ export class Agent {
       return this.namingResponse(nameMatch)
     }
 
-    // Content safety: refuse illegal/harmful topics before calling the model
-    const violation = checkText(userMessage)
+    // Content safety: semantic check before calling the model
+    const violation = await detectUnsafe(client, userMessage)
     if (violation !== 'none') {
       return this.safetyRefusal(violation)
     }
@@ -248,13 +248,7 @@ export class Agent {
     async function* wrappedStream(): AsyncGenerator<string, void, unknown> {
       let fullResponse = ''
       for await (const chunk of stream) {
-        const candidate = fullResponse + chunk
-        // Cut off immediately if the model drifts into illegal content
-        if (checkText(candidate) !== 'none') {
-          yield '（这个话题我不能继续聊了。）'
-          break
-        }
-        fullResponse = candidate
+        fullResponse += chunk
         yield chunk
       }
       self.conversationHistory.push({ role: 'assistant', content: fullResponse })
@@ -265,8 +259,13 @@ export class Agent {
       self.saveConversation()
       recordInteraction()
       recordUsage(provider, model, userMessage, fullResponse)
-      analyzeConversationForMemories(userMessage, fullResponse, self.currentConversationId!).catch(() => {})
-      self.trySemanticMemory(client, userMessage, fullResponse).catch(() => {})
+      // Semantic review of the reply: if the model slipped into unsafe content,
+      // don't let it into memory extraction or semantic distillation
+      const unsafeOut = await detectUnsafe(client, fullResponse)
+      if (unsafeOut === 'none') {
+        analyzeConversationForMemories(userMessage, fullResponse, self.currentConversationId!).catch(() => {})
+        self.trySemanticMemory(client, userMessage, fullResponse).catch(() => {})
+      }
     }
 
     return wrappedStream()
