@@ -84,6 +84,7 @@ export function registerDataHandlers(agent: Agent): void {
 
     const fileUrl = `local://${encodeURIComponent(destPath)}`
     setConfig(`sprite_${spriteKey}`, fileUrl)
+    setConfig('model_type', 'sprites')
 
     return { success: true, path: fileUrl }
   })
@@ -109,6 +110,7 @@ export function registerDataHandlers(agent: Agent): void {
 
     const fileUrl = `local://${encodeURIComponent(destPath)}`
     setConfig(`sprite_${spriteKey}`, fileUrl)
+    setConfig('model_type', 'sprites')
 
     return { success: true, path: fileUrl }
   })
