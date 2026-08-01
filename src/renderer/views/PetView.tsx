@@ -117,8 +117,8 @@ export function PetView({ modelSource, expression, mood, onClick, onContextMenu 
       ) : (
         <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={displayState} size={140} />
       )}
-      {bubbles.map(b => (
-        <div key={b.id} className={`pet-bubble ${b.type}`} style={{ position: 'absolute', top: -10 - (bubbles.indexOf(b) * 50), left: '50%', transform: 'translateX(-50%)' }}>
+      {bubbles.map((b, i) => (
+        <div key={b.id} className={`pet-bubble ${b.type}`} style={{ position: 'absolute', top: 6 + i * 42, left: '50%', transform: 'translateX(-50%)' }}>
           {b.text}
         </div>
       ))}

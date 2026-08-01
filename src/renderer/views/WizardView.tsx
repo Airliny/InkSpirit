@@ -87,7 +87,7 @@ export function WizardView({ onComplete }: WizardViewProps) {
           <p className="wizard-desc">选择模型文件夹中的 .model3.json 文件</p>
           <p className="wizard-sub">会自动复制整个模型文件夹</p>
           <div className={`wizard-dropzone ${live2dPath ? 'has-file' : ''}`} onClick={handleImportLive2D} style={{ height: 140 }}>
-            {importing ? <span>导入中...</span> : live2dPath ? <span style={{ color: '#34d399' }}>模型已导入</span> : <><span className="wizard-dropzone-icon">+</span><span>点击选择 .model3.json</span></>}
+            {importing ? <span>导入中...</span> : live2dPath ? <span style={{ color: 'var(--moss)' }}>模型已导入</span> : <><span className="wizard-dropzone-icon">+</span><span>点击选择 .model3.json</span></>}
           </div>
           <div className="wizard-actions">
             <button className="wizard-btn" onClick={() => setStep('choose_type')}>上一步</button>

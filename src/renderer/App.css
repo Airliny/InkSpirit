@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* =============================================
+   砚灵 InkSpirit — 水墨宣纸主题
+   paper 宣纸 / ink 墨 / cinnabar 朱砂
+   ============================================= */
 
 * {
   margin: 0;
@@ -7,24 +10,27 @@
 }
 
 :root {
-  --bg-glass: rgba(18, 18, 30, 0.78);
-  --bg-card: rgba(28, 28, 48, 0.72);
-  --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-input: rgba(255, 255, 255, 0.06);
-  --text-primary: #f0f0f5;
-  --text-secondary: #8888aa;
-  --text-muted: #5a5a78;
-  --accent: #818cf8;
-  --accent-glow: rgba(129, 140, 248, 0.25);
-  --gradient-1: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
-  --gradient-2: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  --border: rgba(255, 255, 255, 0.06);
-  --border-focus: rgba(129, 140, 248, 0.4);
-  --radius-lg: 20px;
-  --radius-md: 14px;
-  --radius-sm: 10px;
-  --radius-xs: 8px;
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --paper: #f6f1e5;
+  --paper-deep: #efe7d4;
+  --paper-shadow: rgba(90, 74, 45, 0.08);
+  --ink: #2b2a26;
+  --ink-soft: #57534b;
+  --ink-faint: #8d8778;
+  --line: rgba(43, 42, 38, 0.14);
+  --line-strong: rgba(43, 42, 38, 0.28);
+  --cinnabar: #b3402a;
+  --cinnabar-deep: #8e2f1d;
+  --cinnabar-soft: rgba(179, 64, 42, 0.1);
+  --moss: #4a6b53;
+  --moss-soft: rgba(74, 107, 83, 0.12);
+  --ochre: #a67c2e;
+  --ochre-soft: rgba(166, 124, 46, 0.12);
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', Georgia, serif;
+  --font-sans: -apple-system, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --shadow-paper: 0 2px 6px var(--paper-shadow), 0 10px 28px rgba(90, 74, 45, 0.1);
 }
 
 html, body, #root {
@@ -32,12 +38,12 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   background: transparent;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 /* =============================================
-   Pet Mode — zero chrome, just the sprite
+   Pet Mode
    ============================================= */
 
 .pet-mode-root {
@@ -59,11 +65,11 @@ html, body, #root {
   position: relative;
 }
 
-/* Pet bubbles */
+/* Pet bubbles — 墨迹宣纸感 */
 .pet-bubble {
-  padding: 6px 14px;
-  border-radius: 14px;
-  font-size: 12px;
+  padding: 7px 15px;
+  border-radius: 3px 14px 14px 14px;
+  font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
   pointer-events: none;
@@ -72,18 +78,19 @@ html, body, #root {
 }
 
 .pet-bubble.speak {
-  background: rgba(28, 28, 48, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #e0e0f0;
-  border-radius: 14px 14px 14px 4px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 8px var(--paper-shadow);
 }
 
 .pet-bubble.thought {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #9999bb;
+  background: transparent;
+  border-bottom: 1px dashed var(--line-strong);
+  color: var(--ink-faint);
   font-style: italic;
-  border-radius: 14px;
+  border-radius: 0;
+  padding: 2px 4px;
 }
 
 @keyframes bubblePop {
@@ -94,9 +101,11 @@ html, body, #root {
 /* Pet mood effects */
 .pet-zzz {
   position: absolute;
-  top: 10px;
-  right: 20px;
-  font-size: 16px;
+  top: 8px;
+  right: 22px;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  color: var(--ink-faint);
   animation: zzzFloat 2s ease-in-out infinite;
   pointer-events: none;
 }
@@ -107,7 +116,8 @@ html, body, #root {
 }
 
 .pet-view.mood-sleepy {
-  filter: brightness(0.85);
+  filter: brightness(0.92) saturate(0.9);
+  transition: filter 1s ease;
 }
 
 .pet-view.mood-playful {
@@ -115,15 +125,12 @@ html, body, #root {
 }
 
 .pet-view.mood-sad {
-  filter: brightness(0.75) saturate(0.85);
+  filter: brightness(0.85) saturate(0.75);
+  transition: filter 1s ease;
 }
 
 .pet-view.mood-grumpy {
-  filter: brightness(0.92) hue-rotate(-12deg) saturate(1.1);
-}
-
-.pet-view.mood-sleepy,
-.pet-view.mood-sad {
+  filter: brightness(0.95) sepia(0.15);
   transition: filter 1s ease;
 }
 
@@ -133,7 +140,7 @@ html, body, #root {
 }
 
 /* =============================================
-   Panel Mode — app container with title bar
+   Panel Mode — 宣纸卷轴
    ============================================= */
 
 .app-container {
@@ -141,29 +148,44 @@ html, body, #root {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: transparent;
+  background: var(--paper);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: var(--shadow-paper);
 }
 
 .title-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 18px;
-  background: var(--bg-glass);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  background: var(--paper-deep);
+  border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
   user-select: none;
 }
 
 .title-text {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  letter-spacing: 0.5px;
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--ink-soft);
+  letter-spacing: 2px;
+  position: relative;
+  padding-left: 14px;
+}
+
+/* 朱砂印点 */
+.title-text::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: var(--cinnabar);
+  border-radius: 1px;
+  opacity: 0.85;
 }
 
 .title-actions {
@@ -173,13 +195,13 @@ html, body, #root {
 }
 
 .title-btn {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
   font-size: 14px;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -188,20 +210,18 @@ html, body, #root {
 }
 
 .title-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--cinnabar-soft);
+  color: var(--cinnabar);
 }
 
 .main-content {
   flex: 1;
   overflow: hidden;
-  background: var(--bg-glass);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: var(--paper);
 }
 
 /* =============================================
-   Chat Panel — bubble style
+   Chat Panel
    ============================================= */
 
 .chat-panel {
@@ -213,13 +233,13 @@ html, body, #root {
 .chat-pet-avatar {
   display: flex;
   justify-content: center;
-  padding: 20px 0 12px;
+  padding: 16px 0 8px;
   cursor: pointer;
   transition: transform 0.2s ease;
 }
 
 .chat-pet-avatar:hover {
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 
 .chat-bubbles {
@@ -232,34 +252,30 @@ html, body, #root {
 }
 
 .chat-bubbles::-webkit-scrollbar {
-  width: 3px;
-}
-
-.chat-bubbles::-webkit-scrollbar-track {
-  background: transparent;
+  width: 4px;
 }
 
 .chat-bubbles::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  background: var(--line-strong);
+  border-radius: 4px;
 }
 
-/* Empty state bubbles */
+/* Empty state — 题跋 */
 .chat-empty {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  padding: 20px 0;
+  padding: 28px 4px;
 }
 
 .chat-empty-bubble {
   padding: 10px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 18px 18px 18px 6px;
-  color: var(--text-secondary);
-  font-size: 13.5px;
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: 3px 14px 14px 14px;
+  color: var(--ink-soft);
+  font-size: 13px;
   animation: bubbleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -272,37 +288,37 @@ html, body, #root {
 /* Chat bubble */
 .chat-bubble {
   max-width: 85%;
-  padding: 10px 16px;
+  padding: 10px 15px;
   font-size: 13.5px;
-  line-height: 1.55;
+  line-height: 1.6;
   word-break: break-word;
   animation: bubbleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .chat-bubble.user {
   align-self: flex-end;
-  background: var(--gradient-2);
-  color: #fff;
-  border-radius: 18px 18px 6px 18px;
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.2);
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 14px 3px 14px 14px;
+  box-shadow: 0 2px 10px rgba(43, 42, 38, 0.18);
 }
 
 .chat-bubble.assistant {
   align-self: flex-start;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  border-radius: 18px 18px 18px 6px;
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 3px 14px 14px 14px;
 }
 
 .chat-bubble.streaming::after {
   content: '';
   display: inline-block;
   width: 5px;
-  height: 14px;
-  background: var(--accent);
-  margin-left: 2px;
-  border-radius: 3px;
+  height: 13px;
+  background: var(--cinnabar);
+  margin-left: 3px;
+  border-radius: 2px;
   vertical-align: text-bottom;
   animation: cursorBlink 0.8s ease-in-out infinite;
 }
@@ -317,45 +333,46 @@ html, body, #root {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Chat input */
+/* Chat input — 毛笔落款 */
 .chat-input-container {
   padding: 10px 14px;
-  background: var(--bg-card);
-  border-top: 1px solid var(--border);
+  background: var(--paper-deep);
+  border-top: 1px solid var(--line);
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
 .chat-input {
   flex: 1;
-  padding: 10px 16px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  color: var(--text-primary);
+  padding: 9px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--ink);
   font-size: 13px;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   outline: none;
   transition: all 0.2s ease;
 }
 
 .chat-input:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--ink-soft);
+  box-shadow: 0 0 0 3px rgba(43, 42, 38, 0.06);
 }
 
 .chat-input::placeholder {
-  color: var(--text-muted);
+  color: var(--ink-faint);
 }
 
 .chat-send-btn {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border: none;
-  border-radius: 50%;
-  background: var(--gradient-1);
-  color: #fff;
-  font-size: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--cinnabar);
+  color: var(--paper);
+  font-size: 15px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -365,54 +382,82 @@ html, body, #root {
 }
 
 .chat-send-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.35;
   cursor: not-allowed;
   transform: none;
-  box-shadow: none;
 }
 
 .chat-send-btn:not(:disabled):hover {
-  transform: scale(1.08);
-  box-shadow: 0 4px 16px var(--accent-glow);
+  background: var(--cinnabar-deep);
+  transform: translateY(-1px);
 }
 
 /* =============================================
-   Settings
+   Settings — 册页
    ============================================= */
 
 .settings-view {
-  padding: 24px 20px;
+  padding: 20px 18px 28px;
   height: 100%;
   overflow-y: auto;
 }
 
 .settings-view::-webkit-scrollbar {
-  width: 3px;
+  width: 4px;
 }
 
 .settings-view::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  background: var(--line-strong);
+  border-radius: 4px;
 }
 
 .settings-view h3 {
-  color: var(--text-primary);
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 20px;
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-view h3::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }
 
 .settings-section {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
 }
 
 .settings-section h4 {
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: var(--ink-soft);
+  font-family: var(--font-serif);
+  font-size: 12.5px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* 印章小方块 */
+.settings-section h4::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  background: var(--cinnabar);
+  border-radius: 2px;
+  opacity: 0.75;
 }
 
 .settings-sprites {
@@ -426,11 +471,11 @@ html, body, #root {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: var(--bg-input);
-  border-radius: var(--radius-xs);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   font-size: 13px;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
+  color: var(--ink-soft);
 }
 
 .settings-sprite-row span:first-child {
@@ -440,29 +485,29 @@ html, body, #root {
 
 .settings-sprite-status {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--ink-faint);
 }
 
 .settings-sprite-status.has {
-  color: #34d399;
+  color: var(--moss);
 }
 
 .settings-sprite-btn {
-  padding: 4px 14px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
+  padding: 4px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-family: var(--font);
+  font-family: var(--font-sans);
 }
 
 .settings-sprite-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--border-focus);
-  color: var(--text-primary);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
 }
 
 .settings-sprite-btn:disabled {
@@ -473,84 +518,93 @@ html, body, #root {
 .settings-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .settings-form label {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
   font-size: 13px;
   font-weight: 500;
 }
 
 .settings-form input,
 .settings-form select {
-  padding: 10px 14px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
+  padding: 9px 13px;
+  background: var(--paper);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--ink);
   font-size: 13.5px;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   outline: none;
   transition: all 0.2s ease;
 }
 
 .settings-form input:focus,
 .settings-form select:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--ink-soft);
+  box-shadow: 0 0 0 3px rgba(43, 42, 38, 0.06);
 }
 
 .settings-form select {
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238888aa' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238d8778' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 32px;
 }
 
 .settings-save-btn {
-  padding: 10px 20px;
-  background: var(--gradient-1);
-  color: #fff;
+  padding: 9px 18px;
+  background: var(--cinnabar);
+  color: var(--paper);
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   cursor: pointer;
   transition: all 0.2s ease;
+  letter-spacing: 1px;
 }
 
-.settings-save-btn:hover {
+.settings-save-btn:hover:not(:disabled) {
+  background: var(--cinnabar-deep);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px var(--accent-glow);
+  box-shadow: 0 3px 10px var(--cinnabar-soft);
+}
+
+.settings-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .settings-back-btn {
-  margin-top: 16px;
+  margin-top: 14px;
   padding: 8px 16px;
   background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
+  color: var(--ink-soft);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   font-size: 13px;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   cursor: pointer;
   transition: all 0.2s ease;
+  letter-spacing: 1px;
 }
 
 .settings-back-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
 }
 
 /* =============================================
-   Wizard
+   Wizard — 开卷
    ============================================= */
 
 .wizard-container {
@@ -561,9 +615,10 @@ html, body, #root {
   align-items: center;
   justify-content: center;
   padding: 32px 28px;
-  background: var(--bg-glass);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: var(--paper);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-paper);
 }
 
 .wizard-step {
@@ -582,36 +637,40 @@ html, body, #root {
 }
 
 .wizard-icon {
-  font-size: 48px;
-  margin-bottom: 20px;
+  font-size: 46px;
+  margin-bottom: 18px;
   line-height: 1;
 }
 
 .wizard-step h2 {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 8px;
+  font-family: var(--font-serif);
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 3px;
+  margin-bottom: 10px;
 }
 
 .wizard-step h3 {
-  font-size: 18px;
+  font-family: var(--font-serif);
+  font-size: 17px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--ink);
+  letter-spacing: 2px;
   margin-bottom: 12px;
 }
 
 .wizard-desc {
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: 13.5px;
+  color: var(--ink-soft);
   margin-bottom: 4px;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .wizard-sub {
   font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 24px;
+  color: var(--ink-faint);
+  margin-bottom: 22px;
 }
 
 .wizard-import-section {
@@ -621,18 +680,17 @@ html, body, #root {
 }
 
 .wizard-import-section h3 {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
   margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .wizard-dropzone {
   width: 100%;
   height: 180px;
-  border: 2px dashed var(--border);
+  border: 1.5px dashed var(--line-strong);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
@@ -641,20 +699,21 @@ html, body, #root {
   gap: 6px;
   cursor: pointer;
   transition: all 0.25s ease;
-  color: var(--text-muted);
+  color: var(--ink-faint);
   font-size: 13px;
+  background: var(--paper-deep);
   overflow: hidden;
 }
 
 .wizard-dropzone:hover {
-  border-color: var(--border-focus);
-  background: var(--bg-hover);
+  border-color: var(--cinnabar);
+  background: var(--cinnabar-soft);
 }
 
 .wizard-dropzone.has-file {
-  border-color: #34d399;
+  border-color: var(--moss);
   border-style: solid;
-  background: rgba(52, 211, 153, 0.06);
+  background: var(--moss-soft);
 }
 
 .wizard-dropzone.small {
@@ -662,13 +721,8 @@ html, body, #root {
 }
 
 .wizard-dropzone-icon {
-  font-size: 32px;
-  color: var(--text-muted);
-}
-
-.wizard-dropzone-hint {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 30px;
+  color: var(--ink-faint);
 }
 
 .wizard-preview {
@@ -682,28 +736,29 @@ html, body, #root {
 .wizard-actions {
   display: flex;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 22px;
   width: 100%;
 }
 
 .wizard-btn {
   flex: 1;
-  padding: 12px 20px;
-  border: 1px solid var(--border);
+  padding: 11px 20px;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text-secondary);
-  font-size: 14px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13.5px;
   font-weight: 500;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   cursor: pointer;
   transition: all 0.2s ease;
+  letter-spacing: 1px;
 }
 
 .wizard-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--border-focus);
-  color: var(--text-primary);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
 }
 
 .wizard-btn:disabled {
@@ -712,19 +767,16 @@ html, body, #root {
 }
 
 .wizard-btn.primary {
-  background: var(--gradient-1);
-  color: #fff;
+  background: var(--cinnabar);
+  color: var(--paper);
   border: none;
   font-weight: 600;
 }
 
 .wizard-btn.primary:hover:not(:disabled) {
+  background: var(--cinnabar-deep);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px var(--accent-glow);
-}
-
-.wizard-btn.primary:disabled {
-  opacity: 0.4;
+  box-shadow: 0 3px 10px var(--cinnabar-soft);
 }
 
 .wizard-form {
@@ -736,7 +788,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
   font-size: 13px;
   font-weight: 500;
   text-align: left;
@@ -744,33 +796,36 @@ html, body, #root {
 
 .wizard-form input {
   padding: 10px 14px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--ink);
   font-size: 13.5px;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   outline: none;
   transition: all 0.2s ease;
 }
 
 .wizard-form input:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--ink-soft);
+  box-shadow: 0 0 0 3px rgba(43, 42, 38, 0.06);
 }
 
 .wizard-skip {
-  margin-top: 16px;
+  margin-top: 14px;
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: 13px;
+  color: var(--ink-faint);
+  font-size: 12.5px;
   cursor: pointer;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   transition: color 0.2s ease;
   padding: 8px;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 4px;
 }
 
 .wizard-skip:hover {
-  color: var(--text-secondary);
+  color: var(--ink-soft);
 }

@@ -170,6 +170,30 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
       <h3>设置</h3>
 
       <div className="settings-section">
+        <h4>AI 配置</h4>
+        <div className="settings-form">
+          <label>Provider
+            <select value={provider} onChange={e => setProvider(e.target.value)}>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="ollama">Ollama (本地)</option>
+            </select>
+          </label>
+          {provider !== 'ollama' && (
+            <label>API Key
+              <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'} />
+            </label>
+          )}
+          <label>Model
+            <input type="text" value={model} onChange={e => setModel(e.target.value)} placeholder={provider === 'openai' ? 'gpt-4o-mini' : provider === 'anthropic' ? 'claude-sonnet-4-20250514' : provider === 'deepseek' ? 'deepseek-chat' : 'llama3'} />
+          </label>
+          <button className="settings-save-btn" onClick={handleSaveAI}>{saved ? '已保存' : '保存设置'}</button>
+        </div>
+      </div>
+
+
+      <div className="settings-section">
         <h4>伙伴形象</h4>
         {modelSource.type === 'live2d' && (
           <div style={{ marginBottom: 8 }}>
@@ -179,7 +203,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
                 await window.inkAPI.setConfig('model_type', 'sprites')
                 onModelSourceChange({ type: 'sprites', sprites: {} })
               }}
-              style={{ color: '#fbbf24' }}
+              style={{ color: 'var(--ochre)' }}
             >
               切换为精灵图模式
             </button>
@@ -202,6 +226,90 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           </div>
         )}
       </div>
+
+
+      <div className="settings-section">
+        <h4>本地模型 (Ollama)</h4>
+        {ollamaRunning === null && <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>检测 Ollama 环境...</div>}
+        {ollamaRunning === false && (
+          <div style={{ fontSize: 13, color: 'var(--ochre)' }}>
+            未检测到 Ollama。请先安装并启动 Ollama：<a href="https://ollama.com/download" target="_blank" style={{ color: 'var(--cinnabar)' }}>ollama.com/download</a>
+          </div>
+        )}
+        {ollamaRunning === true && (
+          <>
+            <div style={{ fontSize: 13, color: 'var(--moss)', marginBottom: 10 }}>
+              Ollama v{ollamaVersion} 运行中
+            </div>
+            {hardware && (
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                你的设备：{hardware.gpuName || '未知显卡'} ｜ 显存 {hardware.vramGB !== null ? `${hardware.vramGB}GB` : '核显/共享'} ｜ 内存 {hardware.totalRamGB}GB
+              </div>
+            )}
+            <div className="settings-form">
+              {installedModels.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 6 }}>已安装模型</div>
+                  {installedModels.map(m => (
+                    <div key={m.name} className="settings-sprite-row">
+                      <span style={{ flex: 1 }}>{m.name}</span>
+                      <span className="settings-sprite-status">{(m.size / 1024 / 1024 / 1024).toFixed(1)}GB</span>
+                      <button className="settings-sprite-btn" onClick={() => window.inkAPI.useLocalModel(m.name)}>使用</button>
+                      <button className="settings-sprite-btn" onClick={async () => { await window.inkAPI.removeLocalModel(m.name); refreshModels() }}>删除</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {installedModels.length === 0 && (
+                <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 }}>还没有本地模型</div>
+              )}
+              <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 6 }}>可用模型（点击下载前请确认你的显卡满足最低要求）</div>
+              {catalog.map(m => (
+                <div key={m.tag} className="settings-sprite-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                  <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10 }}>
+                    <span style={{ flex: 1, fontWeight: 500 }}>
+                      {m.name} <span style={{ color: 'var(--ink-faint)' }}>({m.parameterSize})</span>
+                      {m.recommended && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--paper)', background: 'var(--moss)', borderRadius: 3, padding: '1px 6px', letterSpacing: 1 }}>推荐</span>}
+                    </span>
+                    <span className="settings-sprite-status">{m.size}</span>
+                    {m.installed ? (
+                      <button className="settings-sprite-btn" onClick={() => window.inkAPI.useLocalModel(m.tag)}>使用</button>
+                    ) : m.feasible ? (
+                      <button
+                        className="settings-sprite-btn"
+                        disabled={!!pullingModel}
+                        onClick={() => handlePull(m.tag)}
+                      >
+                        下载
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 11, color: 'var(--cinnabar)' }}>禁止安装</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
+                    {m.description} ｜ 需显存 ≥{m.minVramGB}GB / 内存 ≥{m.minRamGB}GB
+                  </div>
+                  {!m.feasible && (
+                    <div style={{ fontSize: 11, color: 'var(--cinnabar)' }}>{m.reason}</div>
+                  )}
+                  {pullingModel === m.tag && (
+                    <div style={{ width: '100%' }}>
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 2 }}>下载中... {pullProgress}%</div>
+                      <div style={{ height: 4, borderRadius: 2, background: 'var(--paper)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pullProgress}%`, background: 'var(--cinnabar)', transition: 'width 0.3s' }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {pullError && (
+                <div style={{ fontSize: 12, color: 'var(--cinnabar)', marginTop: 8 }}>{pullError}</div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
 
       <div className="settings-section">
         <h4>陪伴提醒</h4>
@@ -237,87 +345,6 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
         </div>
       </div>
 
-      <div className="settings-section">
-        <h4>本地模型 (Ollama)</h4>
-        {ollamaRunning === null && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>检测 Ollama 环境...</div>}
-        {ollamaRunning === false && (
-          <div style={{ fontSize: 13, color: '#fbbf24' }}>
-            未检测到 Ollama。请先安装并启动 Ollama：<a href="https://ollama.com/download" target="_blank" style={{ color: '#818cf8' }}>ollama.com/download</a>
-          </div>
-        )}
-        {ollamaRunning === true && (
-          <>
-            <div style={{ fontSize: 13, color: '#34d399', marginBottom: 10 }}>
-              Ollama v{ollamaVersion} 运行中
-            </div>
-            {hardware && (
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                你的设备：{hardware.gpuName || '未知显卡'} ｜ 显存 {hardware.vramGB !== null ? `${hardware.vramGB}GB` : '核显/共享'} ｜ 内存 {hardware.totalRamGB}GB
-              </div>
-            )}
-            <div className="settings-form">
-              {installedModels.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>已安装模型</div>
-                  {installedModels.map(m => (
-                    <div key={m.name} className="settings-sprite-row">
-                      <span style={{ flex: 1 }}>{m.name}</span>
-                      <span className="settings-sprite-status">{(m.size / 1024 / 1024 / 1024).toFixed(1)}GB</span>
-                      <button className="settings-sprite-btn" onClick={() => window.inkAPI.useLocalModel(m.name)}>使用</button>
-                      <button className="settings-sprite-btn" onClick={async () => { await window.inkAPI.removeLocalModel(m.name); refreshModels() }}>删除</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {installedModels.length === 0 && (
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>还没有本地模型</div>
-              )}
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>可用模型（点击下载前请确认你的显卡满足最低要求）</div>
-              {catalog.map(m => (
-                <div key={m.tag} className="settings-sprite-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-                  <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10 }}>
-                    <span style={{ flex: 1, fontWeight: 500 }}>
-                      {m.name} <span style={{ color: 'var(--text-muted)' }}>({m.parameterSize})</span>
-                      {m.recommended && <span style={{ marginLeft: 6, fontSize: 11, color: '#34d399', border: '1px solid #34d399', borderRadius: 8, padding: '0 6px' }}>推荐</span>}
-                    </span>
-                    <span className="settings-sprite-status">{m.size}</span>
-                    {m.installed ? (
-                      <button className="settings-sprite-btn" onClick={() => window.inkAPI.useLocalModel(m.tag)}>使用</button>
-                    ) : m.feasible ? (
-                      <button
-                        className="settings-sprite-btn"
-                        disabled={!!pullingModel}
-                        onClick={() => handlePull(m.tag)}
-                      >
-                        下载
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#ff6b6b' }}>禁止安装</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {m.description} ｜ 需显存 ≥{m.minVramGB}GB / 内存 ≥{m.minRamGB}GB
-                  </div>
-                  {!m.feasible && (
-                    <div style={{ fontSize: 11, color: '#ff6b6b' }}>{m.reason}</div>
-                  )}
-                  {pullingModel === m.tag && (
-                    <div style={{ width: '100%' }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>下载中... {pullProgress}%</div>
-                      <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-input)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${pullProgress}%`, background: 'var(--gradient-1)', transition: 'width 0.3s' }} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {pullError && (
-                <div style={{ fontSize: 12, color: '#ff6b6b', marginTop: 8 }}>{pullError}</div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
 
       <div className="settings-section">
         <h4>成本控制</h4>
@@ -335,7 +362,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
             />
           </label>
           {routerEnabled && (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
               {routerLocalModel
                 ? `本地模型：${routerLocalModel}（简短闲聊自动走本地，复杂问题走云端）`
                 : '未选择本地模型，请到"本地模型"区块选择"使用"'}
@@ -346,14 +373,14 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           </label>
           <button className="settings-save-btn" onClick={handleSaveBudget}>保存预算</button>
           {costSummary && (
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.8 }}>
               <div>本月（{costSummary.month}）用量：{costSummary.totalTokens.toLocaleString()} tokens</div>
               <div>费用：${costSummary.totalCostUsd.toFixed(3)} / 预算 ${costSummary.budgetUsd}</div>
               {costSummary.budgetExceeded && (
-                <div style={{ color: '#ff6b6b' }}>预算已用完，云端请求将被拦截</div>
+                <div style={{ color: 'var(--cinnabar)' }}>预算已用完，云端请求将被拦截</div>
               )}
               {Object.entries(costSummary.entries).map(([p, e]: any) => (
-                <div key={p} style={{ color: 'var(--text-muted)' }}>
+                <div key={p} style={{ color: 'var(--ink-faint)' }}>
                   {p}: {e.requests} 次 / ${e.costUsd.toFixed(3)}
                 </div>
               ))}
@@ -361,6 +388,17 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           )}
         </div>
       </div>
+
+
+      <div className="settings-section">
+        <h4>数据管理</h4>
+        <div className="settings-form" style={{ flexDirection: 'row', gap: 8 }}>
+          <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleExport}>备份数据</button>
+          <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleImport}>恢复数据</button>
+        </div>
+        {dataMsg && <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>{dataMsg}</div>}
+      </div>
+
 
       <div className="settings-section">
         <h4>软件更新</h4>
@@ -380,7 +418,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           </button>
           {updateState === 'available' && (
             <>
-              <div style={{ fontSize: 13, color: '#34d399' }}>发现新版本 {updateVersion}</div>
+              <div style={{ fontSize: 13, color: 'var(--moss)' }}>发现新版本 {updateVersion}</div>
               <button
                 className="settings-save-btn"
                 onClick={() => { window.inkAPI.downloadUpdate() }}
@@ -391,17 +429,17 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           )}
           {updateState === 'downloading' && (
             <>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
                 下载中... {updatePercent}%
               </div>
-              <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-input)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${updatePercent}%`, background: 'var(--gradient-1)', transition: 'width 0.3s' }} />
+              <div style={{ height: 4, borderRadius: 2, background: 'var(--paper)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${updatePercent}%`, background: 'var(--cinnabar)', transition: 'width 0.3s' }} />
               </div>
             </>
           )}
           {updateState === 'downloaded' && (
             <>
-              <div style={{ fontSize: 13, color: '#34d399' }}>更新已就绪</div>
+              <div style={{ fontSize: 13, color: 'var(--moss)' }}>更新已就绪</div>
               <button
                 className="settings-save-btn"
                 onClick={() => { window.inkAPI.installUpdate() }}
@@ -411,45 +449,14 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
             </>
           )}
           {updateState === 'not-available' && (
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>当前已是最新版本</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>当前已是最新版本</div>
           )}
           {updateState === 'error' && (
-            <div style={{ fontSize: 13, color: '#ff6b6b' }}>检查更新失败：{updateMessage}</div>
+            <div style={{ fontSize: 13, color: 'var(--cinnabar)' }}>检查更新失败：{updateMessage}</div>
           )}
         </div>
       </div>
 
-      <div className="settings-section">
-        <h4>AI 配置</h4>
-        <div className="settings-form">
-          <label>Provider
-            <select value={provider} onChange={e => setProvider(e.target.value)}>
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="ollama">Ollama (本地)</option>
-            </select>
-          </label>
-          {provider !== 'ollama' && (
-            <label>API Key
-              <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'} />
-            </label>
-          )}
-          <label>Model
-            <input type="text" value={model} onChange={e => setModel(e.target.value)} placeholder={provider === 'openai' ? 'gpt-4o-mini' : provider === 'anthropic' ? 'claude-sonnet-4-20250514' : provider === 'deepseek' ? 'deepseek-chat' : 'llama3'} />
-          </label>
-          <button className="settings-save-btn" onClick={handleSaveAI}>{saved ? '已保存' : '保存设置'}</button>
-        </div>
-      </div>
-
-      <div className="settings-section">
-        <h4>数据管理</h4>
-        <div className="settings-form" style={{ flexDirection: 'row', gap: 8 }}>
-          <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleExport}>备份数据</button>
-          <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleImport}>恢复数据</button>
-        </div>
-        {dataMsg && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>{dataMsg}</div>}
-      </div>
 
       <button className="settings-back-btn" onClick={onBack}>返回</button>
     </div>

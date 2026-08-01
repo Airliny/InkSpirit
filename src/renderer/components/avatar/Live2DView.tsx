@@ -137,7 +137,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
           position: 'absolute',
           bottom: 4,
           fontSize: 10,
-          color: '#ff6b6b',
+          color: 'var(--cinnabar)',
           textAlign: 'center',
           pointerEvents: 'none'
         }}>
