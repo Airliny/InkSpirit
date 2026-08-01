@@ -160,12 +160,12 @@ export default function App() {
         </div>
       </div>
       <div className="main-content">
-        {panel === 'chat' && (
+        <div style={{ display: panel === 'chat' ? 'flex' : 'none', height: '100%' }}>
           <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onHeaderClick={handleBackToPet} />
-        )}
-        {panel === 'settings' && (
+        </div>
+        <div style={{ display: panel === 'settings' ? 'block' : 'none', height: '100%' }}>
           <SettingsView modelSource={modelSource} onModelSourceChange={setModelSource} onBack={() => setPanel('chat')} />
-        )}
+        </div>
       </div>
     </div>
   )
