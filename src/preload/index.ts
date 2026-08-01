@@ -2,8 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
   chat: (message: string) => ipcRenderer.invoke('agent:chat', message),
-  configureProvider: (apiKey: string, model?: string) =>
-    ipcRenderer.invoke('agent:configureProvider', apiKey, model),
+  configureProvider: (provider: string, apiKey?: string, model?: string, baseUrl?: string) =>
+    ipcRenderer.invoke('agent:configureProvider', provider, apiKey, model, baseUrl),
   getAgentState: () => ipcRenderer.invoke('agent:getState'),
   getConfig: (key: string) => ipcRenderer.invoke('config:get', key),
   setConfig: (key: string, value: string) => ipcRenderer.invoke('config:set', key, value),

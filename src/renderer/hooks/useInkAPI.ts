@@ -4,7 +4,7 @@ declare global {
   interface Window {
     inkAPI: {
       chat: (message: string) => Promise<{ success: boolean; error?: string }>
-      configureProvider: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
+      configureProvider: (provider: string, apiKey?: string, model?: string, baseUrl?: string) => Promise<{ success: boolean; error?: string }>
       getAgentState: () => Promise<{
         emotion: Record<string, unknown>
         personality: Record<string, number>

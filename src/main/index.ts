@@ -6,6 +6,7 @@ import { getDatabase, closeDatabase } from '../core/database'
 import { Agent } from '../core/agent'
 import { startActivityMonitor } from './perception'
 import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTracker'
+import { startGuardian } from './guardian/guardian'
 import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay } from '../core/soul/emotion'
 import { getRelationship } from '../core/soul/relationship'
 import { tick, getPetState, type BehaviorImpulse } from '../core/autonomy/drives'
@@ -31,6 +32,7 @@ app.whenReady().then(() => {
   registerIpcHandlers(agent)
   startPerception()
   startHeartbeat()
+  startGuardian()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
   })

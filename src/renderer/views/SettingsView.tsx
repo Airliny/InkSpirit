@@ -13,17 +13,32 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [model, setModel] = useState('')
   const [saved, setSaved] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [guardianEnabled, setGuardianEnabled] = useState(true)
+  const [guardianThreshold, setGuardianThreshold] = useState('45')
+  const [guardianCooldown, setGuardianCooldown] = useState('60')
+  const [guardianSaved, setGuardianSaved] = useState(false)
 
   useEffect(() => {
     window.inkAPI.getConfig('provider').then(v => { if (v) setProvider(v) })
     window.inkAPI.getConfig('openai_api_key').then(v => { if (v) setApiKey(v) })
     window.inkAPI.getConfig('openai_model').then(v => { if (v) setModel(v) })
+    window.inkAPI.getConfig('guardian_enabled').then(v => { if (v) setGuardianEnabled(v !== 'false') })
+    window.inkAPI.getConfig('guardian_work_threshold_min').then(v => { if (v) setGuardianThreshold(v) })
+    window.inkAPI.getConfig('guardian_cooldown_min').then(v => { if (v) setGuardianCooldown(v) })
   }, [])
 
   async function handleSaveAI() {
     await window.inkAPI.configureProvider(provider, apiKey, model || undefined)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function handleSaveGuardian() {
+    await window.inkAPI.setConfig('guardian_enabled', guardianEnabled ? 'true' : 'false')
+    await window.inkAPI.setConfig('guardian_work_threshold_min', guardianThreshold)
+    await window.inkAPI.setConfig('guardian_cooldown_min', guardianCooldown)
+    setGuardianSaved(true)
+    setTimeout(() => setGuardianSaved(false), 2000)
   }
 
   async function handleImportSprite(key: string) {
@@ -82,6 +97,28 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
             ))}
           </div>
         )}
+      </div>
+
+      <div className="settings-section">
+        <h4>陪伴提醒</h4>
+        <div className="settings-form">
+          <label style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>主动提醒</span>
+            <input
+              type="checkbox"
+              checked={guardianEnabled}
+              onChange={e => setGuardianEnabled(e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+          </label>
+          <label>工作多久后提醒（分钟）
+            <input type="number" value={guardianThreshold} onChange={e => setGuardianThreshold(e.target.value)} min="15" max="240" />
+          </label>
+          <label>两次提醒间隔（分钟）
+            <input type="number" value={guardianCooldown} onChange={e => setGuardianCooldown(e.target.value)} min="30" max="480" />
+          </label>
+          <button className="settings-save-btn" onClick={handleSaveGuardian}>{guardianSaved ? '已保存' : '保存提醒设置'}</button>
+        </div>
       </div>
 
       <div className="settings-section">
