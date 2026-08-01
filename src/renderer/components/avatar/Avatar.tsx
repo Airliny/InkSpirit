@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AnimationState } from './modelTypes'
 import { resolveSpriteUrl } from './modelTypes'
 import type { SpriteSource } from './modelTypes'
+import { SpriteAnimCanvas } from './SpriteAnimCanvas'
 
 interface AvatarProps {
   sprites: SpriteSource
@@ -10,93 +11,56 @@ interface AvatarProps {
   onClick?: () => void
 }
 
-// Wave amplitude per state (px). Sleep barely moves to save power.
-function waveAmp(state: string): number {
-  switch (state) {
-    case 'walk': return 3.2
-    case 'happy': case 'love': return 3
-    case 'surprised': return 4
-    case 'yawn': case 'stretch': return 2
-    case 'sad': return 1.2
-    case 'sleep': return 0.6
-    case 'idle': case 'blink': case 'sit': default: return 1.6
-  }
+// Subtle CSS animations as a fallback when WebGL is unavailable
+const STATE_ANIM: Record<string, string> = {
+  idle: 'anim-float',
+  blink: 'anim-float',
+  sit: 'anim-float',
+  walk: 'anim-sway',
+  happy: 'anim-bounce',
+  love: 'anim-bounce',
+  surprised: 'anim-jump',
+  sleep: 'anim-breath-slow',
+  yawn: 'anim-stretch',
+  stretch: 'anim-stretch',
+  sad: 'anim-droop'
 }
 
 export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const [broken, setBroken] = useState(false)
+  const [useWebGL, setUseWebGL] = useState<boolean | null>(null)
   const url = resolveSpriteUrl({ type: 'sprites', sprites }, state)
+  const animClass = STATE_ANIM[state] ?? 'anim-float'
+  const webglProbe = useRef(false)
 
-  // Slice-wave animation: the image is drawn as vertical strips, each offset
-  // by a travelling sine wave. Very cheap (~24 drawImage calls per frame),
-  // runs at ~30fps, and stops when unmounted (pet panel closed).
+  // Preload every sprite once so state switches don't flicker
   useEffect(() => {
-    if (!url || broken) return
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const img = new Image()
-    let raf = 0
-    let running = true
-
-    img.onerror = () => setBroken(true)
-    img.onload = () => {
-      const N = 24
-      const canvasW = canvas.width
-      const canvasH = canvas.height
-      const scale = Math.min(canvasW / img.width, canvasH / img.height)
-      const dw = img.width * scale
-      const dh = img.height * scale
-      const dx = (canvasW - dw) / 2
-      const dy = (canvasH - dh) / 2
-      const amp = waveAmp(state)
-      const sliceSrcW = img.width / N
-      const sliceDstW = dw / N
-
-      let start = performance.now()
-      let last = 0
-      const STEP = 1000 / 30 // 30fps cap — smooth but gentle on CPU
-
-      const frame = (now: number) => {
-        if (!running) return
-        if (now - last >= STEP) {
-          last = now
-          const t = (now - start) / 1000
-
-          ctx.clearRect(0, 0, canvasW, canvasH)
-          // Gentle breathing scale
-          const breath = 1 + 0.012 * Math.sin(t * 1.1)
-          const cx = canvasW / 2
-          const cy = canvasH / 2
-          ctx.save()
-          ctx.translate(cx, cy)
-          ctx.scale(breath, breath)
-          ctx.translate(-cx, -cy)
-
-          for (let i = 0; i < N; i++) {
-            const wave = amp * Math.sin(t * 1.6 + i * 0.65)
-            ctx.drawImage(
-              img,
-              (i / N) * img.width, 0, sliceSrcW, img.height,
-              dx + i * sliceDstW, dy + wave, sliceDstW + 0.5, dh
-            )
-          }
-          ctx.restore()
-        }
-        raf = requestAnimationFrame(frame)
-      }
-      raf = requestAnimationFrame(frame)
+    const urls = new Set<string>()
+    for (const v of Object.values(sprites)) {
+      if (v) urls.add(v)
     }
-    img.src = url
-
-    return () => {
-      running = false
-      cancelAnimationFrame(raf)
+    for (const u of urls) {
+      const img = new Image()
+      img.src = u
     }
-  }, [url, broken, state])
+    setBroken(false)
+  }, [sprites])
+
+  // A failed image only marks that specific state as broken
+  useEffect(() => { setBroken(false) }, [url])
+
+  // Probe WebGL support once
+  useEffect(() => {
+    if (webglProbe.current) return
+    webglProbe.current = true
+    try {
+      const c = document.createElement('canvas')
+      const gl = c.getContext('webgl') || c.getContext('experimental-webgl')
+      setUseWebGL(!!gl)
+    } catch {
+      setUseWebGL(false)
+    }
+  }, [])
 
   return (
     <div
@@ -113,12 +77,26 @@ export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarP
       }}
     >
       {url && !broken ? (
-        <canvas
-          ref={canvasRef}
-          width={Math.max(1, Math.round(size * 2))}
-          height={Math.max(1, Math.round(size * 2))}
-          style={{ width: size, height: size }}
-        />
+        useWebGL ? (
+          <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+            <SpriteAnimCanvas url={url} size={size} state={state} />
+          </div>
+        ) : (
+          <div className={animClass} style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+            <img
+              src={url}
+              alt="pet"
+              onError={() => setBroken(true)}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                pointerEvents: 'none'
+              }}
+              draggable={false}
+            />
+          </div>
+        )
       ) : (
         <div
           style={{
@@ -132,12 +110,7 @@ export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarP
             boxShadow: '0 4px 16px var(--accent-strong)'
           }}
         >
-          <span style={{
-            fontSize: size * 0.22,
-            color: '#fff',
-            fontWeight: 700,
-            opacity: 0.95
-          }}>
+          <span style={{ fontSize: size * 0.22, color: '#fff', fontWeight: 700, opacity: 0.95 }}>
             砚
           </span>
         </div>
