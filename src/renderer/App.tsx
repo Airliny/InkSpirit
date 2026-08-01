@@ -72,6 +72,10 @@ export default function App() {
     const unsub = window.inkAPI.onWindowMode((newMode) => {
       setMode(newMode)
       if (newMode === 'pet') setPanel(null)
+      // Refresh model info whenever the panel opens so config changes show up
+      if (newMode === 'panel') {
+        window.inkAPI.getModelInfo().then(setModelInfo).catch(() => {})
+      }
     })
     return unsub
   }, [])

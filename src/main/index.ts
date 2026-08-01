@@ -14,7 +14,7 @@ import { getBehaviorStyle } from '../core/soul/personality'
 import { getMemorableMemory, consolidateMemories, decayMemories } from '../core/soul/memory'
 import { pathToFileURL } from 'url'
 import { migrateToSecure } from '../core/secureStore'
-import { preloadConfig, getConfig } from '../core/config'
+import { preloadConfig, getConfig, setConfig } from '../core/config'
 import { uuidv4 } from '../core/utils'
 import fs from 'fs'
 import path from 'path'
@@ -138,6 +138,15 @@ function startHeartbeat(): void {
       // No strong drive right now: emit a natural idle behavior as the single
       // source of animation state, weighted by current energy
       emitIdleBehavior()
+      // The pet actively finds things to do every few ticks
+      if (Math.random() < 0.5) {
+        maybeProactiveAction()
+      }
+    }
+
+    // Daily rituals (morning / good night), checked occasionally
+    if (Math.random() < 0.2) {
+      maybeDailyRitual()
     }
 
     // Forgiveness and emotional decay over time
@@ -186,6 +195,76 @@ function emitIdleBehavior(): void {
       '我刚在想，你好像心情不错？', '嗯…没事，就想看看你在不在。'
     ]
     emit('pet:speak', { message: greetPool[Math.floor(Math.random() * greetPool.length)], action: 'greet' })
+  }
+}
+
+// ---- Proactive actions: the pet actively finds things to do ----
+
+function maybeProactiveAction(): void {
+  if (userIdleMs > 90000) return // user is away — don't disturb
+  const emotion = getCurrentEmotion()
+  const style = getBehaviorStyle()
+  const r = Math.random()
+
+  // Curious watching while the user is active
+  if (r < 0.3) {
+    emit('pet:behavior', { behavior: 'look_around' })
+    if (Math.random() < 0.45) {
+      const watching = [
+        '（看着你忙碌）', '（歪头看了看你）', '（凑近屏幕边）',
+        '（注意到你在打字）', '（好奇地看了你一眼）'
+      ]
+      emit('pet:thought', { thought: watching[Math.floor(Math.random() * watching.length)] })
+    }
+    return
+  }
+
+  // Self-entertainment: playful pets move around more when happy
+  if (r < 0.55 && emotion.happiness > 0.6 && emotion.energy > 0.5) {
+    const pool = ['walk', 'stretch', 'walk', 'look_around']
+    emit('pet:behavior', { behavior: pool[Math.floor(Math.random() * pool.length)] })
+    if (Math.random() < 0.35) {
+      emit('pet:thought', { thought: '（自己玩得很开心）' })
+    }
+    return
+  }
+
+  // Reach out more often than before
+  if (r > 0.8 && Math.random() < style.greetFrequency * 0.5) {
+    const greetPool = [
+      '在忙什么呢？', '（悄悄看了你一眼）', '感觉好久没聊天了。',
+      '我刚在想，你好像心情不错？', '嗯…没事，就想看看你在不在。',
+      '（轻轻戳了戳空气）嘿。', '要不要歇会儿聊两句？'
+    ]
+    emit('pet:speak', { message: greetPool[Math.floor(Math.random() * greetPool.length)], action: 'greet' })
+  }
+}
+
+// ---- Daily rituals: morning greeting & good night, once per day ----
+
+function maybeDailyRitual(): void {
+  const hour = new Date().getHours()
+  const today = new Date().toDateString()
+  const lastGreeting = getConfig('last_greeting_date')
+  const lastNight = getConfig('last_night_date')
+  const emotion = getCurrentEmotion()
+
+  if (hour >= 7 && hour <= 10 && lastGreeting !== today && userIdleMs < 120000) {
+    setConfig('last_greeting_date', today)
+    const greetings = [
+      '早呀，新的一天。', '早上好。今天想做点什么？',
+      '（伸个懒腰）早~', '新的一天开始了，一起加油。'
+    ]
+    emit('pet:speak', { message: greetings[Math.floor(Math.random() * greetings.length)], action: 'greet' })
+    return
+  }
+
+  if (hour >= 22 && hour < 24 && lastNight !== today && userIdleMs < 120000) {
+    setConfig('last_night_date', today)
+    const nights = emotion.happiness > 0.5
+      ? ['晚安，明天见。', '今天也很开心，晚安~']
+      : ['晚安…明天会更好的。', '我守着你，晚安。']
+    emit('pet:speak', { message: nights[Math.floor(Math.random() * nights.length)], action: 'night' })
   }
 }
 

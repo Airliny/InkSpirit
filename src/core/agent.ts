@@ -28,6 +28,11 @@ export class Agent {
   constructor() {
     const savedLocal = getConfig('local_model')
     if (savedLocal) this.configureLocalModel(savedLocal)
+    // Restore the primary provider so getModelInfo() is accurate right away
+    const provider = (getConfig('provider') as AIProvider) || 'openai'
+    const apiKey = getSecureConfig(`${provider}_api_key`) || ''
+    const model = getConfig(`${provider}_model`) || undefined
+    this.configureProvider(provider, apiKey, model, undefined)
   }
 
   configureProvider(
