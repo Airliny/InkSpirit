@@ -29,6 +29,21 @@ declare global {
       installUpdate: () => Promise<boolean>
       onUpdateStatus: (callback: (data: { state: string; version?: string; message?: string }) => void) => () => void
       onUpdateProgress: (callback: (data: { percent: number }) => void) => () => void
+      getOllamaStatus: () => Promise<{ running: boolean; version?: string; error?: string }>
+      listLocalModels: () => Promise<Array<{ name: string; size: number }>>
+      searchModelCatalog: () => Promise<{
+        models: Array<{
+          tag: string; name: string; size: string; parameterSize: string; description: string
+          minVramGB: number; minRamGB: number
+          installed: boolean; feasible: boolean; reason: string; recommended: boolean
+        }>
+        hardware: { totalRamGB: number; vramGB: number | null; gpuName: string }
+      }>
+      getModelHardware: () => Promise<{ totalRamGB: number; vramGB: number | null; gpuName: string }>
+      pullLocalModel: (model: string) => Promise<{ success: boolean; error?: string }>
+      removeLocalModel: (model: string) => Promise<{ success: boolean; error?: string }>
+      useLocalModel: (model: string) => Promise<{ success: boolean; model: string }>
+      onModelPullProgress: (callback: (data: { model: string; percent: number; status: string }) => void) => () => void
     }
   }
 }

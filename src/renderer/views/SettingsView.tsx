@@ -21,6 +21,14 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [updateVersion, setUpdateVersion] = useState('')
   const [updatePercent, setUpdatePercent] = useState(0)
   const [updateMessage, setUpdateMessage] = useState('')
+  const [ollamaRunning, setOllamaRunning] = useState<boolean | null>(null)
+  const [ollamaVersion, setOllamaVersion] = useState('')
+  const [catalog, setCatalog] = useState<any[]>([])
+  const [hardware, setHardware] = useState<any>(null)
+  const [installedModels, setInstalledModels] = useState<any[]>([])
+  const [pullingModel, setPullingModel] = useState('')
+  const [pullProgress, setPullProgress] = useState(0)
+  const [pullError, setPullError] = useState('')
 
   useEffect(() => {
     window.inkAPI.getConfig('provider').then(v => { if (v) setProvider(v) })
@@ -39,8 +47,45 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
       setUpdatePercent(d.percent)
       setUpdateState('downloading')
     })
-    return () => { u1(); u2() }
+    const u3 = window.inkAPI.onModelPullProgress((d) => {
+      setPullProgress(d.percent)
+      if (d.status === 'done') {
+        setPullingModel('')
+        refreshModels()
+      }
+    })
+    refreshOllama()
+    return () => { u1(); u2(); u3() }
   }, [])
+
+  async function refreshOllama() {
+    const s = await window.inkAPI.getOllamaStatus()
+    setOllamaRunning(s.running)
+    if (s.version) setOllamaVersion(s.version)
+    if (s.running) {
+      refreshModels()
+    }
+  }
+
+  async function refreshModels() {
+    const [res, hw] = await Promise.all([
+      window.inkAPI.searchModelCatalog(),
+      window.inkAPI.getModelHardware()
+    ])
+    setCatalog(res.models)
+    setHardware(hw)
+  }
+
+  async function handlePull(model: string) {
+    setPullingModel(model)
+    setPullProgress(0)
+    setPullError('')
+    const r = await window.inkAPI.pullLocalModel(model)
+    if (!r.success && r.error) {
+      setPullError(r.error)
+      setPullingModel('')
+    }
+  }
 
   async function handleSaveAI() {
     await window.inkAPI.configureProvider(provider, apiKey, model || undefined)
@@ -134,6 +179,88 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
           </label>
           <button className="settings-save-btn" onClick={handleSaveGuardian}>{guardianSaved ? '已保存' : '保存提醒设置'}</button>
         </div>
+      </div>
+
+      <div className="settings-section">
+        <h4>本地模型 (Ollama)</h4>
+        {ollamaRunning === null && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>检测 Ollama 环境...</div>}
+        {ollamaRunning === false && (
+          <div style={{ fontSize: 13, color: '#fbbf24' }}>
+            未检测到 Ollama。请先安装并启动 Ollama：<a href="https://ollama.com/download" target="_blank" style={{ color: '#818cf8' }}>ollama.com/download</a>
+          </div>
+        )}
+        {ollamaRunning === true && (
+          <>
+            <div style={{ fontSize: 13, color: '#34d399', marginBottom: 10 }}>
+              Ollama v{ollamaVersion} 运行中
+            </div>
+            {hardware && (
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                你的设备：{hardware.gpuName || '未知显卡'} ｜ 显存 {hardware.vramGB !== null ? `${hardware.vramGB}GB` : '核显/共享'} ｜ 内存 {hardware.totalRamGB}GB
+              </div>
+            )}
+            <div className="settings-form">
+              {installedModels.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>已安装模型</div>
+                  {installedModels.map(m => (
+                    <div key={m.name} className="settings-sprite-row">
+                      <span style={{ flex: 1 }}>{m.name}</span>
+                      <span className="settings-sprite-status">{(m.size / 1024 / 1024 / 1024).toFixed(1)}GB</span>
+                      <button className="settings-sprite-btn" onClick={() => window.inkAPI.useLocalModel(m.name)}>使用</button>
+                      <button className="settings-sprite-btn" onClick={async () => { await window.inkAPI.removeLocalModel(m.name); refreshModels() }}>删除</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {installedModels.length === 0 && (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>还没有本地模型</div>
+              )}
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>可用模型（点击下载前请确认你的显卡满足最低要求）</div>
+              {catalog.map(m => (
+                <div key={m.tag} className="settings-sprite-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                  <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10 }}>
+                    <span style={{ flex: 1, fontWeight: 500 }}>
+                      {m.name} <span style={{ color: 'var(--text-muted)' }}>({m.parameterSize})</span>
+                      {m.recommended && <span style={{ marginLeft: 6, fontSize: 11, color: '#34d399', border: '1px solid #34d399', borderRadius: 8, padding: '0 6px' }}>推荐</span>}
+                    </span>
+                    <span className="settings-sprite-status">{m.size}</span>
+                    {m.installed ? (
+                      <button className="settings-sprite-btn" onClick={() => window.inkAPI.useLocalModel(m.tag)}>使用</button>
+                    ) : m.feasible ? (
+                      <button
+                        className="settings-sprite-btn"
+                        disabled={!!pullingModel}
+                        onClick={() => handlePull(m.tag)}
+                      >
+                        下载
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#ff6b6b' }}>禁止安装</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {m.description} ｜ 需显存 ≥{m.minVramGB}GB / 内存 ≥{m.minRamGB}GB
+                  </div>
+                  {!m.feasible && (
+                    <div style={{ fontSize: 11, color: '#ff6b6b' }}>{m.reason}</div>
+                  )}
+                  {pullingModel === m.tag && (
+                    <div style={{ width: '100%' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>下载中... {pullProgress}%</div>
+                      <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-input)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pullProgress}%`, background: 'var(--gradient-1)', transition: 'width 0.3s' }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {pullError && (
+                <div style={{ fontSize: 12, color: '#ff6b6b', marginTop: 8 }}>{pullError}</div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="settings-section">

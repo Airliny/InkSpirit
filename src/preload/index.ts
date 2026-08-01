@@ -50,6 +50,20 @@ const api = {
     return () => ipcRenderer.removeListener('window:mode', h)
   },
 
+  // Model manager (local models via Ollama)
+  getOllamaStatus: () => ipcRenderer.invoke('model:mgrStatus'),
+  listLocalModels: () => ipcRenderer.invoke('model:mgrList'),
+  searchModelCatalog: () => ipcRenderer.invoke('model:mgrSearch'),
+  getModelHardware: () => ipcRenderer.invoke('model:mgrHardware'),
+  pullLocalModel: (model: string) => ipcRenderer.invoke('model:mgrPull', model),
+  removeLocalModel: (model: string) => ipcRenderer.invoke('model:mgrRemove', model),
+  useLocalModel: (model: string) => ipcRenderer.invoke('model:mgrUse', model),
+  onModelPullProgress: (cb: (data: { model: string; percent: number; status: string }) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, d: { model: string; percent: number; status: string }) => cb(d)
+    ipcRenderer.on('model:pullProgress', h)
+    return () => ipcRenderer.removeListener('model:pullProgress', h)
+  },
+
   // Update
   checkForUpdates: (manual?: boolean) => ipcRenderer.invoke('update:check', !!manual),
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
