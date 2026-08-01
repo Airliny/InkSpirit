@@ -257,7 +257,7 @@ export class Agent {
     if (now - lastAt < 30 * 60 * 1000) return
 
     // Only bother when the conversation looks meaningful
-    const meaningful = /记住|生日|名字|喜欢|讨厌|爱|工作|项目|家人|朋友|猫|狗|计划|梦想|考试|面试|旅行|重要/.test(userMsg)
+    const meaningful = /记住|生日|名字|喜欢|讨厌|最爱|爱|工作|项目|家人|朋友|猫|狗|宠物|计划|梦想|考试|面试|旅行|重要|最近|今天|明天|周末|老板|同事|学校/.test(userMsg)
     if (!meaningful && userMsg.length < 20) return
 
     setConfig('last_semantic_memory_at', String(now))

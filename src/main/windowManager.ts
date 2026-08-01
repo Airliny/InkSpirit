@@ -11,6 +11,7 @@ let dragOrigin = {
 }
 let inertiaTimer: ReturnType<typeof setInterval> | null = null
 let hangTimer: ReturnType<typeof setTimeout> | null = null
+let isHanging = false
 
 const PET_W = 180
 const PET_H = 200
@@ -87,7 +88,7 @@ export function toggleMode(): void {
 }
 
 export function moveWindowBy(dx: number, dy: number): void {
-  if (!mainWindow || !isPetMode) return
+  if (!mainWindow || !isPetMode || isHanging) return
   const [x, y] = mainWindow.getPosition()
   const { width, height } = workAreaFor(mainWindow)
   const newX = Math.max(0, Math.min(width - 200, x + dx))
@@ -207,23 +208,34 @@ function stopInertia(): void {
 /** Shimeji-style: climb onto a target window and cling to its top edge */
 export function hangOnWindow(rect: { x: number; y: number; width: number; height: number }): void {
   if (!mainWindow || !isPetMode) return
+  stopInertia()
   cancelHang()
+  isHanging = true
 
+  const display = screen.getDisplayNearestPoint({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })
+  const waW = display.workAreaSize.width
+  const waH = display.workAreaSize.height
   const x = rect.x + Math.min(Math.max(rect.width / 2 - PET_W / 2, 0), Math.max(rect.width - PET_W, 0))
   // Bottom ~44px of the pet overlaps the window's top edge — looks like clinging
   const y = Math.max(0, rect.y - PET_H + 44)
-  mainWindow.setPosition(Math.round(x), Math.round(y))
+  mainWindow.setPosition(
+    Math.round(Math.max(0, Math.min(waW - PET_W, x))),
+    Math.round(Math.max(0, Math.min(waH - PET_H, y)))
+  )
 
-  // After a while, jump down next to the window
+  // After a while, jump down next to the window (clamped to the work area)
   hangTimer = setTimeout(() => {
     hangTimer = null
+    isHanging = false
     if (!mainWindow || !isPetMode || mainWindow.isDestroyed()) return
-    const [cx, cy] = mainWindow.getPosition()
-    mainWindow.setPosition(cx, Math.min(rect.y + rect.height + 24, cy + PET_H))
+    const [cx] = mainWindow.getPosition()
+    const jy = Math.max(0, Math.min(waH - PET_H, rect.y + rect.height + 24))
+    mainWindow.setPosition(Math.round(Math.max(0, Math.min(waW - PET_W, cx))), Math.round(jy))
   }, 15000)
 }
 
 function cancelHang(): void {
+  isHanging = false
   if (hangTimer) {
     clearTimeout(hangTimer)
     hangTimer = null
