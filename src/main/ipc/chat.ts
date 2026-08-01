@@ -4,6 +4,7 @@ import { getMainWindow } from '../windowManager'
 import { decideRoute, getRouterSettings } from '../../core/cost/router'
 import { getUsageSummary, getMonthlyBudget } from '../../core/cost/usage'
 import { cacheKey, getCachedReply, setCachedReply } from '../../core/cost/cache'
+import { getCurrentEmotion, emotionToExpression } from '../../core/soul/emotion'
 
 export function registerChatHandlers(agent: Agent): void {
   ipcMain.handle('agent:chat', async (_event, message: string) => {
@@ -27,9 +28,11 @@ export function registerChatHandlers(agent: Agent): void {
       }
 
       // Cache: identical message within 10 minutes returns the cached reply
+      // (key includes current emotion so mood-affected replies differ)
       const clientInfo = route === 'local' ? agent.getLocalClientInfo() : agent.getActiveClientInfo()
       if (clientInfo) {
-        const key = cacheKey(clientInfo.provider, clientInfo.model, message)
+        const mood = emotionToExpression(getCurrentEmotion().dominantEmotion)
+        const key = cacheKey(clientInfo.provider, clientInfo.model, `${mood}|${message}`)
         const cached = getCachedReply(key)
         if (cached !== null) {
           win.webContents.send('agent:chat-chunk', cached)
@@ -51,7 +54,8 @@ export function registerChatHandlers(agent: Agent): void {
       win.webContents.send('agent:chat-done')
 
       if (clientInfo && fullResponse) {
-        setCachedReply(cacheKey(clientInfo.provider, clientInfo.model, message), fullResponse)
+        const mood = emotionToExpression(getCurrentEmotion().dominantEmotion)
+        setCachedReply(cacheKey(clientInfo.provider, clientInfo.model, `${mood}|${message}`), fullResponse)
       }
 
       return { success: true, route }

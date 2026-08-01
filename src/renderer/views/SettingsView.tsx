@@ -127,6 +127,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     const r = await window.inkAPI.importModel(key)
     setImporting(false)
     if (r.success) {
+      await window.inkAPI.setConfig('model_type', 'sprites')
       const updated = await window.inkAPI.getModelSprites()
       const sprites: SpriteSource = {}
       for (const [k, v] of Object.entries(updated)) { if (v) (sprites as any)[k] = v }
@@ -157,7 +158,14 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
         <h4>伙伴形象</h4>
         {modelSource.type === 'live2d' && (
           <div style={{ marginBottom: 8 }}>
-            <button className="settings-sprite-btn" onClick={() => onModelSourceChange({ type: 'sprites', sprites: {} })} style={{ color: '#fbbf24' }}>
+            <button
+              className="settings-sprite-btn"
+              onClick={async () => {
+                await window.inkAPI.setConfig('model_type', 'sprites')
+                onModelSourceChange({ type: 'sprites', sprites: {} })
+              }}
+              style={{ color: '#fbbf24' }}
+            >
               切换为精灵图模式
             </button>
           </div>

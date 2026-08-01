@@ -3,7 +3,7 @@ import { useEffect, useCallback, useRef } from 'react'
 declare global {
   interface Window {
     inkAPI: {
-      chat: (message: string) => Promise<{ success: boolean; error?: string }>
+      chat: (message: string) => Promise<{ success: boolean; error?: string; budgetBlocked?: boolean; cached?: boolean; route?: string }>
       configureProvider: (provider: string, apiKey?: string, model?: string, baseUrl?: string) => Promise<{ success: boolean; error?: string }>
       getAgentState: () => Promise<{
         emotion: Record<string, unknown>

@@ -88,7 +88,13 @@ export default function App() {
 
   const handleSend = useCallback(async (message: string) => {
     addUserMessage(message); setExpression('happy')
-    try { await window.inkAPI.chat(message) } catch {
+    try {
+      const r = await window.inkAPI.chat(message)
+      if (!r.success) {
+        appendAssistantChunk(r.budgetBlocked ? '预算已用完…我们先用本地模型聊天吧？' : '抱歉，我暂时无法回应...')
+        finishAssistantMessage(); setExpression('sad')
+      }
+    } catch {
       appendAssistantChunk('\u62b1\u6b49\uff0c\u6211\u6682\u65f6\u65e0\u6cd5\u56de\u5e94...')
       finishAssistantMessage(); setExpression('sad')
     }
