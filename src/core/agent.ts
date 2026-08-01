@@ -15,6 +15,7 @@ import { getConfig, setConfig } from './config'
 import { setSecureConfig, getSecureConfig } from './secureStore'
 import { uuidv4 } from './utils'
 import { recordUsage } from './cost/usage'
+import { checkText, refusalMessage, type ViolationLevel } from './safety/policy'
 import { tryEvolvePersonality } from './soul/personality'
 
 export class Agent {
@@ -172,6 +173,12 @@ export class Agent {
       return this.namingResponse(nameMatch)
     }
 
+    // Content safety: refuse illegal/harmful topics before calling the model
+    const violation = checkText(userMessage)
+    if (violation !== 'none') {
+      return this.safetyRefusal(violation)
+    }
+
     const sentiment = analyzeSentiment(userMessage)
 
     if (isIgnoring() && sentiment.hostility > 0.3) {
@@ -241,7 +248,13 @@ export class Agent {
     async function* wrappedStream(): AsyncGenerator<string, void, unknown> {
       let fullResponse = ''
       for await (const chunk of stream) {
-        fullResponse += chunk
+        const candidate = fullResponse + chunk
+        // Cut off immediately if the model drifts into illegal content
+        if (checkText(candidate) !== 'none') {
+          yield '（这个话题我不能继续聊了。）'
+          break
+        }
+        fullResponse = candidate
         yield chunk
       }
       self.conversationHistory.push({ role: 'assistant', content: fullResponse })
@@ -291,6 +304,20 @@ export class Agent {
       tags: ['语义记忆'],
       sourceConversationId: this.currentConversationId
     })
+  }
+
+  private async *safetyRefusal(level: ViolationLevel): AsyncGenerator<string, void, unknown> {
+    const msg = refusalMessage(level)
+    this.conversationHistory.push({ role: 'assistant', content: msg })
+    if (this.conversationHistory.length > 50) {
+      this.conversationHistory = this.conversationHistory.slice(-50)
+    }
+    this.saveConversation()
+    recordInteraction()
+    // Track how often the user crosses the line (light touch, not blocking)
+    const count = Number(getConfig('safety_violations') || 0)
+    setConfig('safety_violations', String(count + 1))
+    yield msg
   }
 
   private async *namingResponse(name: string): AsyncGenerator<string, void, unknown> {
