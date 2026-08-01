@@ -4,10 +4,12 @@ import { registerChatHandlers } from './chat'
 import { registerConfigHandlers } from './config'
 import { registerSystemHandlers } from './system'
 import { registerDataHandlers } from './data'
+import { registerUpdateHandlers } from './update'
 
 export function registerIpcHandlers(agent: Agent): void {
   registerChatHandlers(agent)
   registerConfigHandlers()
   registerSystemHandlers()
   registerDataHandlers()
+  registerUpdateHandlers()
 }

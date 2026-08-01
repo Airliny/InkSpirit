@@ -2,6 +2,12 @@ appId: com.inkspirit.app
 productName: InkSpirit
 copyright: Copyright © 2025 InkSpirit
 
+publish:
+  provider: github
+  owner: Airliny
+  repo: InkSpirit
+  releaseType: release
+
 directories:
   buildResources: resources
   output: dist
@@ -31,3 +37,4 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: InkSpirit
+  artifactName: InkSpirit-Setup-${version}.exe

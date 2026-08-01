@@ -7,6 +7,7 @@ import { Agent } from '../core/agent'
 import { startActivityMonitor } from './perception'
 import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTracker'
 import { startGuardian } from './guardian/guardian'
+import { initUpdater } from './updater/updater'
 import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay, emotionToExpression, type EmotionState } from '../core/soul/emotion'
 import { getRelationship } from '../core/soul/relationship'
 import { tick, getPetState, type BehaviorImpulse } from '../core/autonomy/drives'
@@ -34,6 +35,7 @@ app.whenReady().then(() => {
   startHeartbeat()
   startGuardian()
   startMoodSync()
+  initUpdater()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
   })

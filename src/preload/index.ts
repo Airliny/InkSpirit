@@ -50,6 +50,21 @@ const api = {
     return () => ipcRenderer.removeListener('window:mode', h)
   },
 
+  // Update
+  checkForUpdates: (manual?: boolean) => ipcRenderer.invoke('update:check', !!manual),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateStatus: (cb: (data: { state: string; version?: string; message?: string }) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, d: { state: string; version?: string; message?: string }) => cb(d)
+    ipcRenderer.on('update:status', h)
+    return () => ipcRenderer.removeListener('update:status', h)
+  },
+  onUpdateProgress: (cb: (data: { percent: number }) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, d: { percent: number }) => cb(d)
+    ipcRenderer.on('update:progress', h)
+    return () => ipcRenderer.removeListener('update:progress', h)
+  },
+
   // Pet behavior events (from autonomy loop)
   onPetBehavior: (cb: (data: { behavior: string }) => void) => {
     const h = (_e: Electron.IpcRendererEvent, d: { behavior: string }) => cb(d)

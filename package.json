@@ -1,6 +1,6 @@
 {
   "name": "inkspirit",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "InkSpirit - AI Desktop Companion",
   "main": "./out/main/index.js",
   "scripts": {
@@ -8,12 +8,13 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder",
-    "lint": "eslint src --ext .ts,.tsx",
+    "publish:release": "electron-vite build && electron-builder --publish never && node scripts/publish.mjs",    "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
+    "electron-updater": "^6.8.9",
     "node-fetch": "^2.7.0",
     "openai": "^4.50.0",
     "pixi-live2d-display": "^0.4.0",

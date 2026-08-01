@@ -24,6 +24,11 @@ declare global {
       onPetBehavior: (callback: (data: { behavior: string }) => void) => () => void
       onPetSpeak: (callback: (data: { message: string; action: string }) => void) => () => void
       onPetThought: (callback: (data: { thought: string }) => void) => () => void
+      checkForUpdates: (manual?: boolean) => Promise<{ state: string; version?: string; message?: string }>
+      downloadUpdate: () => Promise<boolean>
+      installUpdate: () => Promise<boolean>
+      onUpdateStatus: (callback: (data: { state: string; version?: string; message?: string }) => void) => () => void
+      onUpdateProgress: (callback: (data: { percent: number }) => void) => () => void
     }
   }
 }

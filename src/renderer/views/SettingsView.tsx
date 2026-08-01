@@ -17,6 +17,10 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [guardianThreshold, setGuardianThreshold] = useState('45')
   const [guardianCooldown, setGuardianCooldown] = useState('60')
   const [guardianSaved, setGuardianSaved] = useState(false)
+  const [updateState, setUpdateState] = useState<string>('idle')
+  const [updateVersion, setUpdateVersion] = useState('')
+  const [updatePercent, setUpdatePercent] = useState(0)
+  const [updateMessage, setUpdateMessage] = useState('')
 
   useEffect(() => {
     window.inkAPI.getConfig('provider').then(v => { if (v) setProvider(v) })
@@ -25,6 +29,17 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     window.inkAPI.getConfig('guardian_enabled').then(v => { if (v) setGuardianEnabled(v !== 'false') })
     window.inkAPI.getConfig('guardian_work_threshold_min').then(v => { if (v) setGuardianThreshold(v) })
     window.inkAPI.getConfig('guardian_cooldown_min').then(v => { if (v) setGuardianCooldown(v) })
+
+    const u1 = window.inkAPI.onUpdateStatus((d) => {
+      setUpdateState(d.state)
+      if (d.version) setUpdateVersion(d.version)
+      if (d.message) setUpdateMessage(d.message)
+    })
+    const u2 = window.inkAPI.onUpdateProgress((d) => {
+      setUpdatePercent(d.percent)
+      setUpdateState('downloading')
+    })
+    return () => { u1(); u2() }
   }, [])
 
   async function handleSaveAI() {
@@ -118,6 +133,63 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
             <input type="number" value={guardianCooldown} onChange={e => setGuardianCooldown(e.target.value)} min="30" max="480" />
           </label>
           <button className="settings-save-btn" onClick={handleSaveGuardian}>{guardianSaved ? '已保存' : '保存提醒设置'}</button>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h4>软件更新</h4>
+        <div className="settings-form">
+          <button
+            className="settings-save-btn"
+            disabled={updateState === 'checking' || updateState === 'downloading'}
+            onClick={async () => {
+              setUpdateState('checking')
+              const r = await window.inkAPI.checkForUpdates(true)
+              setUpdateState(r.state)
+              if (r.version) setUpdateVersion(r.version)
+              if (r.message) setUpdateMessage(r.message)
+            }}
+          >
+            {updateState === 'checking' ? '检查中...' : '检查更新'}
+          </button>
+          {updateState === 'available' && (
+            <>
+              <div style={{ fontSize: 13, color: '#34d399' }}>发现新版本 {updateVersion}</div>
+              <button
+                className="settings-save-btn"
+                onClick={() => { window.inkAPI.downloadUpdate() }}
+              >
+                下载更新
+              </button>
+            </>
+          )}
+          {updateState === 'downloading' && (
+            <>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                下载中... {updatePercent}%
+              </div>
+              <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-input)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${updatePercent}%`, background: 'var(--gradient-1)', transition: 'width 0.3s' }} />
+              </div>
+            </>
+          )}
+          {updateState === 'downloaded' && (
+            <>
+              <div style={{ fontSize: 13, color: '#34d399' }}>更新已就绪</div>
+              <button
+                className="settings-save-btn"
+                onClick={() => { window.inkAPI.installUpdate() }}
+              >
+                立即重启安装
+              </button>
+            </>
+          )}
+          {updateState === 'not-available' && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>当前已是最新版本</div>
+          )}
+          {updateState === 'error' && (
+            <div style={{ fontSize: 13, color: '#ff6b6b' }}>检查更新失败：{updateMessage}</div>
+          )}
         </div>
       </div>
 
