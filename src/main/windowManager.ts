@@ -10,6 +10,10 @@ let dragOrigin = {
   velX: 0, velY: 0, lastMoveAt: 0
 }
 let inertiaTimer: ReturnType<typeof setInterval> | null = null
+let hangTimer: ReturnType<typeof setTimeout> | null = null
+
+const PET_W = 180
+const PET_H = 200
 
 export function createMainWindow(): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
@@ -112,6 +116,7 @@ function workAreaFor(win: BrowserWindow): { width: number; height: number } {
 
 export function startWindowDrag(): void {
   stopInertia()
+  cancelHang()
   if (!mainWindow || !isPetMode) return
   const [x, y] = mainWindow.getPosition()
   const cursor = screen.getCursorScreenPoint()
@@ -196,6 +201,32 @@ function stopInertia(): void {
   if (inertiaTimer) {
     clearInterval(inertiaTimer)
     inertiaTimer = null
+  }
+}
+
+/** Shimeji-style: climb onto a target window and cling to its top edge */
+export function hangOnWindow(rect: { x: number; y: number; width: number; height: number }): void {
+  if (!mainWindow || !isPetMode) return
+  cancelHang()
+
+  const x = rect.x + Math.min(Math.max(rect.width / 2 - PET_W / 2, 0), Math.max(rect.width - PET_W, 0))
+  // Bottom ~44px of the pet overlaps the window's top edge — looks like clinging
+  const y = Math.max(0, rect.y - PET_H + 44)
+  mainWindow.setPosition(Math.round(x), Math.round(y))
+
+  // After a while, jump down next to the window
+  hangTimer = setTimeout(() => {
+    hangTimer = null
+    if (!mainWindow || !isPetMode || mainWindow.isDestroyed()) return
+    const [cx, cy] = mainWindow.getPosition()
+    mainWindow.setPosition(cx, Math.min(rect.y + rect.height + 24, cy + PET_H))
+  }, 15000)
+}
+
+function cancelHang(): void {
+  if (hangTimer) {
+    clearTimeout(hangTimer)
+    hangTimer = null
   }
 }
 

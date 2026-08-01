@@ -1,10 +1,12 @@
-import { app, BrowserWindow, protocol, net, powerMonitor } from 'electron'
+import { app, BrowserWindow, protocol, net, powerMonitor, screen } from 'electron'
 import { createMainWindow, getMainWindow } from './windowManager'
 import { createTray } from './trayManager'
 import { registerIpcHandlers } from './ipc/index'
 import { getDatabase, closeDatabase } from '../core/database'
 import { Agent } from '../core/agent'
 import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTracker'
+import { getForegroundWindow } from './perception/windowScanner'
+import { hangOnWindow } from './windowManager'
 import { startGuardian } from './guardian/guardian'
 import { initUpdater } from './updater/updater'
 import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay, emotionToExpression, flushEmotion, type EmotionState } from '../core/soul/emotion'
@@ -149,6 +151,11 @@ function startHeartbeat(): void {
       maybeDailyRitual()
     }
 
+    // Occasionally climb onto the foreground window
+    if (Math.random() < 0.06) {
+      maybeHangOnWindow()
+    }
+
     // Forgiveness and emotional decay over time
     if (Math.random() < 0.1) {
       forgiveEmotion(0.003)
@@ -240,8 +247,31 @@ function maybeProactiveAction(): void {
   }
 }
 
-// ---- Daily rituals: morning greeting & good night, once per day ----
+// ---- Climb onto windows (Shimeji-style) ----
 
+let lastHangAt = 0
+const HANG_COOLDOWN_MS = 5 * 60 * 1000
+
+async function maybeHangOnWindow(): Promise<void> {
+  if (userIdleMs > 90000) return
+  if (Date.now() - lastHangAt < HANG_COOLDOWN_MS) return
+
+  const win = await getForegroundWindow()
+  if (!win) return
+  // Skip tiny windows, fullscreen apps, and ourselves
+  if (win.width < 300 || win.height < 250) return
+  const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
+  if (win.height >= screenH - 80 || win.width >= screenW - 80) return
+  if (/inkspirit|砚灵/i.test(win.title)) return
+
+  lastHangAt = Date.now()
+  hangOnWindow(win)
+  emit('pet:behavior', { behavior: 'sit' })
+  const thoughts = ['（爬上窗口边，扒着看了看）', '（挂在你窗口上）', '（从窗口边探出脑袋）']
+  emit('pet:thought', { thought: thoughts[Math.floor(Math.random() * thoughts.length)] })
+}
+
+// ---- Daily rituals: morning greeting & good night, once per day ----
 function maybeDailyRitual(): void {
   const hour = new Date().getHours()
   const today = new Date().toDateString()
