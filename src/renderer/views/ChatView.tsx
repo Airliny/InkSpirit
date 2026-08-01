@@ -22,7 +22,13 @@ export function ChatView({ modelSource, state, messages, isStreaming, modelInfo,
   useEffect(() => {
     const el = bubblesRef.current
     if (!el) return
-    // Auto-scroll only when the user is already near the bottom, so reading
+    const last = messages[messages.length - 1]
+    // The user just sent a message: jump to the bottom so it's visible
+    if (last?.role === 'user') {
+      el.scrollTop = el.scrollHeight
+      return
+    }
+    // Otherwise auto-scroll only when already near the bottom, so reading
     // older messages isn't interrupted by streaming output
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
     if (nearBottom) el.scrollTop = el.scrollHeight
