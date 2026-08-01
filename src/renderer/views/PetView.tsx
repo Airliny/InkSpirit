@@ -2,25 +2,52 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Avatar } from '../components/avatar/Avatar'
 import { Live2DView } from '../components/avatar/Live2DView'
 import type { AnimationState, ModelSource } from '../components/avatar/modelTypes'
+import type { AvatarExpression } from '../stores/avatarStore'
 
 interface Bubble { id: number; text: string; type: 'speak' | 'thought'; createdAt: number }
 let bubbleId = 0
 
+const EXPR_TO_STATE: Record<string, AnimationState> = {
+  neutral: 'idle',
+  happy: 'happy',
+  sad: 'sad',
+  surprised: 'surprised',
+  curious: 'idle',
+  tired: 'sleep',
+  love: 'love'
+}
+
 interface PetViewProps {
   modelSource: ModelSource
   state: AnimationState
+  expression?: AvatarExpression
+  mood?: string
   onClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
 }
 
-export function PetView({ modelSource, state, onClick, onContextMenu }: PetViewProps) {
+export function PetView({ modelSource, state, expression, mood, onClick, onContextMenu }: PetViewProps) {
   const [bubbles, setBubbles] = useState<Bubble[]>([])
   const [currentState, setCurrentState] = useState<AnimationState>(state)
+  const [override, setOverride] = useState<AnimationState | null>(null)
   const walkRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const overrideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragging = useRef(false)
   const startPos = useRef({ x: 0, y: 0 })
 
   useEffect(() => { setCurrentState(state) }, [state])
+
+  // Emotional expression overrides behavior briefly, then fades back
+  useEffect(() => {
+    if (!expression || expression === 'neutral') return
+    setOverride(EXPR_TO_STATE[expression] ?? 'idle')
+    if (overrideTimer.current) clearTimeout(overrideTimer.current)
+    overrideTimer.current = setTimeout(() => setOverride(null), 8000)
+  }, [expression])
+
+  useEffect(() => () => { if (overrideTimer.current) clearTimeout(overrideTimer.current) }, [])
+
+  const displayState = override ?? currentState
 
   useEffect(() => {
     if (currentState === 'walk') {
@@ -79,17 +106,20 @@ export function PetView({ modelSource, state, onClick, onContextMenu }: PetViewP
     dragging.current = false
   }, [onClick])
 
+  const moodClass = mood && mood !== 'neutral' ? `mood-${mood}` : ''
+
   return (
     <div
-      className="pet-view"
+      className={`pet-view ${moodClass}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
+      {mood === 'sleepy' && <div className="pet-zzz">z Z z</div>}
       {modelSource.type === 'live2d' ? (
-        <Live2DView modelPath={modelSource.live2d.modelPath} width={180} height={200} />
+        <Live2DView modelPath={modelSource.live2d.modelPath} state={displayState} width={180} height={200} />
       ) : (
-        <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={currentState} size={140} />
+        <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={displayState} size={140} />
       )}
       {bubbles.map(b => (
         <div key={b.id} className={`pet-bubble ${b.type}`} style={{ position: 'absolute', top: -10 - (bubbles.indexOf(b) * 50), left: '50%', transform: 'translateX(-50%)' }}>

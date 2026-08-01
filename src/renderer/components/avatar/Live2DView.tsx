@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Application, type IDestroyOptions } from 'pixi.js'
+import type { AnimationState } from './modelTypes'
 
 let appInstance: Application | null = null
 let appRefCount = 0
+
+const MOTION_MAP: Record<string, string> = {
+  idle: 'idle', walk: 'walk', sit: 'sit', sleep: 'sleep', stretch: 'stretch',
+  yawn: 'yawn', surprised: 'surprised', happy: 'happy', sad: 'sad', love: 'love', blink: 'idle'
+}
 
 function getSharedApp(canvas: HTMLCanvasElement, width: number, height: number): Application {
   if (appInstance) {
@@ -33,14 +39,30 @@ function releaseSharedApp(): void {
 
 interface Live2DViewProps {
   modelPath: string
+  state?: AnimationState
   width?: number
   height?: number
   onClick?: () => void
 }
 
-export function Live2DView({ modelPath, width = 200, height = 200, onClick }: Live2DViewProps) {
+export function Live2DView({ modelPath, state = 'idle', width = 200, height = 200, onClick }: Live2DViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const modelRef = useRef<any>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Switch motion when animation state changes
+  useEffect(() => {
+    const model = modelRef.current
+    if (!model) return
+    try {
+      const motion = MOTION_MAP[state]
+      if (motion && typeof model.motion === 'function') {
+        model.motion(motion)
+      }
+    } catch {
+      // model may not have that motion
+    }
+  }, [state])
 
   useEffect(() => {
     if (!canvasRef.current || !modelPath) return
@@ -79,6 +101,7 @@ export function Live2DView({ modelPath, width = 200, height = 200, onClick }: Li
         }
 
         app.stage.addChild(model)
+        modelRef.current = model
       } catch (e: any) {
         if (!destroyed) {
           setError(e.message)
@@ -91,6 +114,7 @@ export function Live2DView({ modelPath, width = 200, height = 200, onClick }: Li
 
     return () => {
       destroyed = true
+      modelRef.current = null
       releaseSharedApp()
     }
   }, [modelPath, width, height])

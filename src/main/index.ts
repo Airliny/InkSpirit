@@ -7,7 +7,7 @@ import { Agent } from '../core/agent'
 import { startActivityMonitor } from './perception'
 import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTracker'
 import { startGuardian } from './guardian/guardian'
-import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay } from '../core/soul/emotion'
+import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay, emotionToExpression, type EmotionState } from '../core/soul/emotion'
 import { getRelationship } from '../core/soul/relationship'
 import { tick, getPetState, type BehaviorImpulse } from '../core/autonomy/drives'
 import { pathToFileURL } from 'url'
@@ -33,6 +33,7 @@ app.whenReady().then(() => {
   startPerception()
   startHeartbeat()
   startGuardian()
+  startMoodSync()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
   })
@@ -174,6 +175,25 @@ function generateSocialMessage(
 function emit(channel: string, data: Record<string, unknown>): void {
   const win = getMainWindow()
   if (win) win.webContents.send(channel, data)
+}
+
+// ---- Mood sync: push real soul state to the renderer ----
+
+function startMoodSync(): void {
+  setInterval(() => {
+    const emotion = getCurrentEmotion()
+    emit('pet:expression', { expression: emotionToExpression(emotion.dominantEmotion) })
+    emit('pet:mood', { mood: getMood(emotion) })
+    emit('pet:soul', { energy: emotion.energy, attachment: emotion.attachment })
+  }, 15000)
+}
+
+function getMood(emotion: EmotionState): string {
+  if (emotion.energy < 0.35) return 'sleepy'
+  if (emotion.grudge > 0.6) return 'grumpy'
+  if (emotion.happiness < 0.3) return 'sad'
+  if (emotion.energy > 0.7 && emotion.happiness > 0.6) return 'playful'
+  return 'neutral'
 }
 
 export function getAgent(): Agent {

@@ -18,6 +18,12 @@ declare global {
       onChatChunk: (callback: (chunk: string) => void) => () => void
       onChatDone: (callback: () => void) => () => void
       onNavigate: (callback: (page: string) => void) => () => void
+      onPetExpression: (callback: (data: { expression: string }) => void) => () => void
+      onPetMood: (callback: (data: { mood: string }) => void) => () => void
+      onPetSoul: (callback: (data: { energy: number; attachment: number }) => void) => () => void
+      onPetBehavior: (callback: (data: { behavior: string }) => void) => () => void
+      onPetSpeak: (callback: (data: { message: string; action: string }) => void) => () => void
+      onPetThought: (callback: (data: { thought: string }) => void) => () => void
     }
   }
 }
