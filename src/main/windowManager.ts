@@ -3,6 +3,7 @@ import { join } from 'path'
 
 let mainWindow: BrowserWindow | null = null
 let isPetMode = true
+let dragOrigin = { winX: 0, winY: 0, mouseX: 0, mouseY: 0 }
 
 export function createMainWindow(): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
@@ -90,6 +91,28 @@ export function moveWindowTo(x: number, y: number): void {
   const newX = Math.max(0, Math.min(width - 200, x))
   const newY = Math.max(0, Math.min(height - 200, y))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
+}
+
+export function startWindowDrag(): void {
+  if (!mainWindow || !isPetMode) return
+  const [x, y] = mainWindow.getPosition()
+  const cursor = screen.getCursorScreenPoint()
+  dragOrigin = { winX: x, winY: y, mouseX: cursor.x, mouseY: cursor.y }
+}
+
+export function updateWindowDrag(): void {
+  if (!mainWindow || !isPetMode) return
+  const cursor = screen.getCursorScreenPoint()
+  const dx = cursor.x - dragOrigin.mouseX
+  const dy = cursor.y - dragOrigin.mouseY
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const newX = Math.max(0, Math.min(width - 200, dragOrigin.winX + dx))
+  const newY = Math.max(0, Math.min(height - 200, dragOrigin.winY + dy))
+  mainWindow.setPosition(Math.round(newX), Math.round(newY))
+}
+
+export function endWindowDrag(): void {
+  dragOrigin = { winX: 0, winY: 0, mouseX: 0, mouseY: 0 }
 }
 
 export function getMainWindow(): BrowserWindow | null {

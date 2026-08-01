@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { getMainWindow, toggleAlwaysOnTop, setPetMode, setPanelMode, toggleMode, moveWindowBy } from '../windowManager'
+import { getMainWindow, toggleAlwaysOnTop, setPetMode, setPanelMode, toggleMode, moveWindowBy, moveWindowTo, startWindowDrag, updateWindowDrag, endWindowDrag } from '../windowManager'
 
 export function registerSystemHandlers(): void {
   ipcMain.handle('window:minimize', () => {
@@ -33,5 +33,17 @@ export function registerSystemHandlers(): void {
   ipcMain.handle('window:getPosition', () => {
     const win = getMainWindow()
     return win ? win.getPosition() as [number, number] : [0, 0]
+  })
+
+  ipcMain.handle('window:startDrag', () => {
+    startWindowDrag()
+  })
+
+  ipcMain.handle('window:updateDrag', () => {
+    updateWindowDrag()
+  })
+
+  ipcMain.handle('window:endDrag', () => {
+    endWindowDrag()
   })
 }

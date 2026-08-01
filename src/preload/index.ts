@@ -15,6 +15,9 @@ const api = {
   moveWindowBy: (dx: number, dy: number) => ipcRenderer.invoke('window:moveBy', dx, dy),
   moveWindowTo: (x: number, y: number) => ipcRenderer.invoke('window:moveTo', x, y),
   getWindowPosition: () => ipcRenderer.invoke('window:getPosition') as Promise<[number, number]>,
+  startWindowDrag: () => ipcRenderer.invoke('window:startDrag'),
+  updateWindowDrag: () => ipcRenderer.invoke('window:updateDrag'),
+  endWindowDrag: () => ipcRenderer.invoke('window:endDrag'),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   toggleAlwaysOnTop: () => ipcRenderer.invoke('window:toggleAlwaysOnTop'),
 
