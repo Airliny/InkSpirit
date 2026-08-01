@@ -101,22 +101,3 @@ declare global {
   }
 }
 
-export function useInkAPI() {
-  const chat = useCallback(async (message: string) => {
-    return window.inkAPI.chat(message)
-  }, [])
-
-  const getConfig = useCallback(async (key: string) => {
-    return window.inkAPI.getConfig(key)
-  }, [])
-
-  const setConfig = useCallback(async (key: string, value: string) => {
-    return window.inkAPI.setConfig(key, value)
-  }, [])
-
-  const minimizeWindow = useCallback(() => {
-    window.inkAPI.minimizeWindow()
-  }, [])
-
-  return { chat, getConfig, setConfig, minimizeWindow }
-}

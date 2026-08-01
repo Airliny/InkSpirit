@@ -39,16 +39,3 @@ export function getTotalWorkMinutes(): number {
   return Math.floor(getSession().totalActiveMs / 60000)
 }
 
-export function getContinuousWorkMinutes(): number {
-  if (!currentStreakStart) return 0
-  return Math.floor((Date.now() - currentStreakStart) / 60000)
-}
-
-export function resetSession(): void {
-  session = {
-    startTime: Date.now(),
-    totalActiveMs: 0,
-    stretches: []
-  }
-  currentStreakStart = null
-}
