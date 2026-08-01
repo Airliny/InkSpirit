@@ -107,6 +107,17 @@ export class Agent {
     return !!this.localClient
   }
 
+  /** Semantic safety check for a message (used by IPC cache-hit path too) */
+  async checkUnsafe(text: string): Promise<boolean> {
+    const detector = this.localClient ?? this.aiClient
+    if (!detector) return false
+    try {
+      return (await detectUnsafe(detector, text)) !== 'none'
+    } catch {
+      return false
+    }
+  }
+
   getActiveClientInfo(): { provider: AIProvider; model: string } {
     return { provider: this.currentProvider, model: this.currentModel }
   }
@@ -161,9 +172,26 @@ export class Agent {
       this.currentConversationId = uuidv4()
     }
 
-    // Naming: if the user gives the pet a name, remember it for good
+    // Content safety FIRST — before anything else (incl. naming), so a
+    // violating message or a violating name can't slip through.
+    // Token-lean: skip ultra-short casual messages, prefer the free local
+    // model when available; the main model's own guardrails back us up.
+    const skipCheck = userMessage.trim().length <= 8
+    const detector = this.localClient ?? client
+    const violation = skipCheck ? 'none' as const : await detectUnsafe(detector, userMessage)
+    if (violation !== 'none') {
+      return this.safetyRefusal(violation)
+    }
+
+    // Naming: if the user gives the pet a name, remember it for good.
+    // The bare name is always checked (tiny prompt, prevents bypass via a
+    // short message like "叫你冰毒").
     const nameMatch = extractGivenName(userMessage)
     if (nameMatch) {
+      const nameV = await detectUnsafe(detector, nameMatch)
+      if (nameV !== 'none') {
+        return this.safetyRefusal('hard')
+      }
       setConfig('pet_name', nameMatch)
       addMemory(`用户给我起名叫「${nameMatch}」`, {
         type: 'semantic',
@@ -171,18 +199,6 @@ export class Agent {
         tags: ['名字']
       })
       return this.namingResponse(nameMatch)
-    }
-
-    // Content safety: semantic check before calling the model.
-    // Token-lean: skip ultra-short casual messages, prefer the free local
-    // model when available; the main model's own guardrails back us up.
-    const skipCheck = userMessage.trim().length <= 8
-    if (!skipCheck) {
-      const detector = this.localClient ?? client
-      const violation = await detectUnsafe(detector, userMessage)
-      if (violation !== 'none') {
-        return this.safetyRefusal(violation)
-      }
     }
 
     const sentiment = analyzeSentiment(userMessage)

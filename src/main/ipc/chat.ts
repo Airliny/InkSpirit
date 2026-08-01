@@ -37,6 +37,12 @@ export function registerChatHandlers(agent: Agent): void {
         const key = cacheKey(clientInfo.provider, clientInfo.model, `${mood}|${message}`)
         const cached = getCachedReply(key)
         if (cached !== null) {
+          // Cache hits bypass the agent — re-check safety so a cached reply
+          // can't be served to a violating request
+          const unsafe = await agent.checkUnsafe(message)
+          if (unsafe) {
+            return { success: false, error: '这个话题我不能聊。' }
+          }
           win.webContents.send('agent:chat-chunk', cached)
           win.webContents.send('agent:chat-done')
           return { success: true, cached: true }

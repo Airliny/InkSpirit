@@ -10,6 +10,7 @@ let dragOrigin = {
   velX: 0, velY: 0, lastMoveAt: 0
 }
 let inertiaTimer: ReturnType<typeof setInterval> | null = null
+let isInertia = false
 let hangTimer: ReturnType<typeof setTimeout> | null = null
 let isHanging = false
 
@@ -88,7 +89,7 @@ export function toggleMode(): void {
 }
 
 export function moveWindowBy(dx: number, dy: number): void {
-  if (!mainWindow || !isPetMode || isHanging) return
+  if (!mainWindow || !isPetMode || isHanging || isInertia) return
   const [x, y] = mainWindow.getPosition()
   const { width, height } = workAreaFor(mainWindow)
   const newX = Math.max(0, Math.min(width - 200, x + dx))
@@ -166,6 +167,7 @@ function startInertia(vx: number, vy: number): void {
   stopInertia()
   if (Math.abs(vx) < 0.15 && Math.abs(vy) < 0.15) return
   if (!mainWindow || !isPetMode) return
+  isInertia = true
 
   const FRICTION = 0.88
   const STEP_MS = 33
@@ -199,6 +201,7 @@ function startInertia(vx: number, vy: number): void {
 }
 
 function stopInertia(): void {
+  isInertia = false
   if (inertiaTimer) {
     clearInterval(inertiaTimer)
     inertiaTimer = null

@@ -217,7 +217,8 @@ function startSceneWatcher(): void {
     if (!win) return
     // Skip our own window
     if (/inkspirit|砚灵/i.test(win.title)) return
-    const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
+    const display = screen.getDisplayNearestPoint({ x: win.x + win.width / 2, y: win.y + win.height / 2 })
+    const { width: sw, height: sh } = display.workAreaSize
     const fullscreen = win.width >= sw - 40 && win.height >= sh - 40
     currentScene = fullscreen ? 'game' : classifyForeground(win.title)
     setGuardianDisturbBlocked(isDisturbing())
