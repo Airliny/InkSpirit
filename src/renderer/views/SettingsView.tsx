@@ -131,12 +131,14 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   }
 
   async function refreshModels() {
-    const [res, hw] = await Promise.all([
+    const [res, hw, installed] = await Promise.all([
       window.inkAPI.searchModelCatalog(),
-      window.inkAPI.getModelHardware()
+      window.inkAPI.getModelHardware(),
+      window.inkAPI.listLocalModels()
     ])
     setCatalog(res.models)
     setHardware(hw)
+    setInstalledModels(installed)
   }
 
   async function handlePull(model: string) {

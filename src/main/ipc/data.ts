@@ -123,7 +123,7 @@ export function registerDataHandlers(agent: Agent): void {
       const val = getConfig(`sprite_${key}`)
       if (val) {
         if (val.startsWith('file://')) {
-          const filePath = val.replace(/^file:\/\/\/?/, '')
+          const filePath = path.normalize(val.replace(/^file:\/\/\/?/, ''))
           const normalized = `local://${encodeURIComponent(filePath)}`
           setConfig(`sprite_${key}`, normalized)
           sprites[key] = normalized

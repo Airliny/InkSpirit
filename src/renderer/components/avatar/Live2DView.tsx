@@ -70,15 +70,26 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
     if (!canvasRef.current || !modelPath) return
 
     let destroyed = false
+    let acquired = false
     setError(null)
+
+    // Release the shared Pixi app exactly once per acquisition, so an
+    // unmount racing with a slow model load can't destroy an app that
+    // another Live2DView is still rendering with.
+    function releaseOnce() {
+      if (!acquired) return
+      acquired = false
+      releaseSharedApp()
+    }
 
     async function load() {
       try {
         const { Live2DModel } = await import('pixi-live2d-display')
         const app = await getSharedApp(canvasRef.current!, width, height)
+        acquired = true
 
         const model = await Live2DModel.from(modelPath)
-        if (destroyed) { releaseSharedApp(); return }
+        if (destroyed) { releaseOnce(); return }
 
         // Center and scale (getBounds can be unreliable before first render)
         const rawBounds = model.getBounds()
@@ -108,9 +119,9 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
         app.stage.addChild(model)
         modelRef.current = model
       } catch (e: any) {
+        releaseOnce()
         if (!destroyed) {
           setError(e.message)
-          releaseSharedApp()
         }
       }
     }
@@ -120,7 +131,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
     return () => {
       destroyed = true
       modelRef.current = null
-      releaseSharedApp()
+      releaseOnce()
     }
   }, [modelPath, width, height])
 

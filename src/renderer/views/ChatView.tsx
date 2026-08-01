@@ -18,11 +18,22 @@ interface ChatViewProps {
 
 export function ChatView({ modelSource, state, messages, isStreaming, modelInfo, lastRoute, onSend, onHeaderClick }: ChatViewProps) {
   const bubblesRef = useRef<HTMLDivElement>(null)
+  const didInit = useRef(false)
 
   useEffect(() => {
     const el = bubblesRef.current
     if (!el) return
     const last = messages[messages.length - 1]
+    // On first mount (e.g. app start with a history), always land at the bottom
+    if (!didInit.current) {
+      didInit.current = true
+      if (messages.length === 0) return
+      el.scrollTop = el.scrollHeight
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight
+      })
+      return
+    }
     // The user just sent a message: jump to the bottom so it's visible
     if (last?.role === 'user') {
       el.scrollTop = el.scrollHeight

@@ -7,7 +7,7 @@ import { Agent } from '../core/agent'
 import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTracker'
 import { getForegroundWindow } from './perception/windowScanner'
 import { classifyForeground, isDoNotDisturb, type ForegroundScene } from './perception/sceneDetector'
-import { hangOnWindow } from './windowManager'
+import { hangOnWindow, physicalRectToDip } from './windowManager'
 import { startGuardian, setGuardianDisturbBlocked } from './guardian/guardian'
 import { initUpdater } from './updater/updater'
 import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay, emotionToExpression, flushEmotion, type EmotionState } from '../core/soul/emotion'
@@ -240,9 +240,12 @@ function startSceneWatcher(): void {
     if (!win) return
     // Skip our own window
     if (/inkspirit|砚灵/i.test(win.title)) return
-    const display = screen.getDisplayNearestPoint({ x: win.x + win.width / 2, y: win.y + win.height / 2 })
-    const { width: sw, height: sh } = display.workAreaSize
-    const fullscreen = win.width >= sw - 40 && win.height >= sh - 40
+    // The window rect is in physical pixels; Electron screen coords are DIPs,
+    // so convert before comparing (avoids false fullscreen on scaled displays)
+    const dip = physicalRectToDip(win)
+    const display = screen.getDisplayNearestPoint({ x: dip.x + dip.width / 2, y: dip.y + dip.height / 2 })
+    const wa = display.workArea
+    const fullscreen = dip.width >= wa.width - 40 && dip.height >= wa.height - 40
     currentScene = fullscreen ? 'game' : classifyForeground(win.title)
     setGuardianDisturbBlocked(isDisturbing())
   }
@@ -309,10 +312,12 @@ async function maybeHangOnWindow(): Promise<void> {
 
   const win = await getForegroundWindow()
   if (!win) return
-  // Skip tiny windows, fullscreen apps, and ourselves
-  if (win.width < 300 || win.height < 250) return
-  const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
-  if (win.height >= screenH - 80 || win.width >= screenW - 80) return
+  // Skip tiny windows, fullscreen apps, and ourselves (rect converted to DIPs)
+  const dip = physicalRectToDip(win)
+  const display = screen.getDisplayNearestPoint({ x: dip.x + dip.width / 2, y: dip.y + dip.height / 2 })
+  const wa = display.workArea
+  if (dip.width < 300 || dip.height < 250) return
+  if (dip.height >= wa.height - 80 || dip.width >= wa.width - 80) return
   if (/inkspirit|砚灵/i.test(win.title)) return
 
   lastHangAt = Date.now()
@@ -565,9 +570,9 @@ function cleanupOrphanAvatars(): void {
       const v = getConfig(`sprite_${k}`)
       if (!v) continue
       if (v.startsWith('local://')) {
-        referencedFiles.add(decodeURIComponent(v.slice('local://'.length)))
+        referencedFiles.add(path.normalize(decodeURIComponent(v.slice('local://'.length))))
       } else if (v.startsWith('file://')) {
-        referencedFiles.add(v.replace(/^file:\/\/\/?/, ''))
+        referencedFiles.add(path.normalize(v.replace(/^file:\/\/\/?/, '')))
       }
     }
 

@@ -35,6 +35,8 @@ export class Agent {
     const apiKey = getSecureConfig(`${provider}_api_key`) || ''
     const model = getConfig(`${provider}_model`) || undefined
     this.configureProvider(provider, apiKey, model, undefined)
+    // Continue the last session so the model keeps its context after a restart
+    this.restoreLastConversation()
   }
 
   configureProvider(
@@ -74,9 +76,10 @@ export class Agent {
       temperature: 0.8
     }
 
-    // Save to config (API key encrypted)
+    // Save to config (API key encrypted). Save even when empty so the user
+    // can clear a stored key by clearing the field.
     setConfig('provider', provider)
-    if (apiKey) setSecureConfig(`${provider}_api_key`, apiKey)
+    if (apiKey !== undefined) setSecureConfig(`${provider}_api_key`, apiKey)
     if (model) setConfig(`${provider}_model`, model)
     if (baseUrl && provider === 'ollama') setConfig('ollama_base_url', baseUrl)
 
@@ -138,6 +141,25 @@ export class Agent {
     this.currentModel = getConfig(`${this.currentProvider}_model`) || ''
     const savedLocal = getConfig('local_model')
     if (savedLocal) this.configureLocalModel(savedLocal)
+    this.restoreLastConversation()
+  }
+
+  /** Continue the most recent persisted conversation after a restart */
+  restoreLastConversation(): void {
+    try {
+      const db = getDatabase()
+      const row = db.prepare(
+        'SELECT id, messages_json FROM conversations ORDER BY created_at DESC LIMIT 1'
+      ).get() as { id: string; messages_json: string } | undefined
+      if (!row) return
+      const parsed = JSON.parse(row.messages_json) as ChatMessage[]
+      const restored = parsed.filter(m => m.role === 'user' || m.role === 'assistant')
+      if (restored.length === 0) return
+      this.conversationHistory = restored.slice(-50)
+      this.currentConversationId = row.id
+    } catch {
+      // restore is best-effort
+    }
   }
 
   private ensureClient(): IAIClient {
@@ -372,7 +394,8 @@ export class Agent {
     yield msg
   }
 
-  private async *coldResponse(hostility: number, provider: AIProvider, model: string, userMessage: string): AsyncGenerator<string, void, unknown> {    const responses = hostility > 0.7
+  private async *coldResponse(hostility: number, provider: AIProvider, model: string, userMessage: string): AsyncGenerator<string, void, unknown> {
+    const responses = hostility > 0.7
       ? ['（转过身去，不理你）', '（沉默）']
       : ['...', '（没有看你）', '嗯。']
     const msg = responses[Math.floor(Math.random() * responses.length)]

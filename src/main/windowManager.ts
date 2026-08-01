@@ -91,28 +91,53 @@ export function toggleMode(): void {
 export function moveWindowBy(dx: number, dy: number): void {
   if (!mainWindow || !isPetMode || isHanging || isInertia) return
   const [x, y] = mainWindow.getPosition()
-  const { width, height } = workAreaFor(mainWindow)
-  const newX = Math.max(0, Math.min(width - PET_W, x + dx))
-  const newY = Math.max(0, Math.min(height - PET_H, y + dy))
+  const wa = workAreaFor(mainWindow)
+  const newX = Math.max(wa.x, Math.min(wa.x + wa.width - PET_W, x + dx))
+  const newY = Math.max(wa.y, Math.min(wa.y + wa.height - PET_H, y + dy))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
 }
 
 export function moveWindowTo(x: number, y: number): void {
   if (!mainWindow || !isPetMode) return
-  const { width, height } = workAreaFor(mainWindow)
-  const newX = Math.max(0, Math.min(width - PET_W, x))
-  const newY = Math.max(0, Math.min(height - PET_H, y))
+  const wa = workAreaFor(mainWindow)
+  const newX = Math.max(wa.x, Math.min(wa.x + wa.width - PET_W, x))
+  const newY = Math.max(wa.y, Math.min(wa.y + wa.height - PET_H, y))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
 }
 
-/** Work area of the display the window currently sits on (multi-monitor aware) */
-function workAreaFor(win: BrowserWindow): { width: number; height: number } {
+/** Work area (incl. origin) of the display the window currently sits on (multi-monitor aware) */
+function workAreaFor(win: BrowserWindow): { x: number; y: number; width: number; height: number } {
   const [x, y] = win.getPosition()
   try {
     const display = screen.getDisplayNearestPoint({ x, y })
-    return display.workAreaSize
+    return display.workArea
   } catch {
-    return screen.getPrimaryDisplay().workAreaSize
+    return screen.getPrimaryDisplay().workArea
+  }
+}
+
+/**
+ * Convert a rect in physical pixels (Windows GetWindowRect) to DIPs, the
+ * coordinate space Electron's screen/window APIs use. Two-pass: derive the
+ * scale factor from the nearest display, convert, then refine.
+ */
+export function physicalRectToDip(rect: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
+  const cx = rect.x + rect.width / 2
+  const cy = rect.y + rect.height / 2
+  let d = screen.getDisplayNearestPoint({ x: cx, y: cy })
+  let sx = cx / d.scaleFactor
+  let sy = cy / d.scaleFactor
+  const refined = screen.getDisplayNearestPoint({ x: sx, y: sy })
+  if (refined.id !== d.id) {
+    d = refined
+    sx = cx / d.scaleFactor
+    sy = cy / d.scaleFactor
+  }
+  return {
+    x: rect.x / d.scaleFactor,
+    y: rect.y / d.scaleFactor,
+    width: rect.width / d.scaleFactor,
+    height: rect.height / d.scaleFactor
   }
 }
 
@@ -145,9 +170,9 @@ export function updateWindowDrag(): void {
 
   const dx = cursor.x - dragOrigin.startMouseX
   const dy = cursor.y - dragOrigin.startMouseY
-  const { width, height } = workAreaFor(mainWindow)
-  const newX = Math.max(0, Math.min(width - PET_W, dragOrigin.winX + dx))
-  const newY = Math.max(0, Math.min(height - PET_H, dragOrigin.winY + dy))
+  const wa = workAreaFor(mainWindow)
+  const newX = Math.max(wa.x, Math.min(wa.x + wa.width - PET_W, dragOrigin.winX + dx))
+  const newY = Math.max(wa.y, Math.min(wa.y + wa.height - PET_H, dragOrigin.winY + dy))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
 }
 
@@ -186,15 +211,15 @@ function startInertia(vx: number, vy: number): void {
     }
 
     const [x, y] = win.getPosition()
-    const { width, height } = workAreaFor(win)
+    const wa = workAreaFor(win)
     let nx = x + vx * STEP_MS
     let ny = y + vy * STEP_MS
 
-    // Bounce off screen edges with energy loss
-    if (nx <= 0) { nx = 0; vx = Math.abs(vx) * 0.6 }
-    if (nx >= width - PET_W) { nx = width - PET_W; vx = -Math.abs(vx) * 0.6 }
-    if (ny <= 0) { ny = 0; vy = Math.abs(vy) * 0.6 }
-    if (ny >= height - PET_H) { ny = height - PET_H; vy = -Math.abs(vy) * 0.6 }
+    // Bounce off the display's work-area edges with energy loss
+    if (nx <= wa.x) { nx = wa.x; vx = Math.abs(vx) * 0.6 }
+    if (nx >= wa.x + wa.width - PET_W) { nx = wa.x + wa.width - PET_W; vx = -Math.abs(vx) * 0.6 }
+    if (ny <= wa.y) { ny = wa.y; vy = Math.abs(vy) * 0.6 }
+    if (ny >= wa.y + wa.height - PET_H) { ny = wa.y + wa.height - PET_H; vy = -Math.abs(vy) * 0.6 }
 
     win.setPosition(Math.round(nx), Math.round(ny))
   }, STEP_MS)
@@ -215,15 +240,17 @@ export function hangOnWindow(rect: { x: number; y: number; width: number; height
   cancelHang()
   isHanging = true
 
-  const display = screen.getDisplayNearestPoint({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })
-  const waW = display.workAreaSize.width
-  const waH = display.workAreaSize.height
-  const x = rect.x + Math.min(Math.max(rect.width / 2 - PET_W / 2, 0), Math.max(rect.width - PET_W, 0))
+  // The foreground-window rect comes from Windows in physical pixels, while
+  // Electron positions are DIPs — convert so the pet lands where it should
+  const dip = physicalRectToDip(rect)
+  const display = screen.getDisplayNearestPoint({ x: dip.x + dip.width / 2, y: dip.y + dip.height / 2 })
+  const wa = display.workArea
+  const x = dip.x + Math.min(Math.max(dip.width / 2 - PET_W / 2, 0), Math.max(dip.width - PET_W, 0))
   // Bottom ~44px of the pet overlaps the window's top edge — looks like clinging
-  const y = Math.max(0, rect.y - PET_H + 44)
+  const y = Math.max(wa.y, dip.y - PET_H + 44)
   mainWindow.setPosition(
-    Math.round(Math.max(0, Math.min(waW - PET_W, x))),
-    Math.round(Math.max(0, Math.min(waH - PET_H, y)))
+    Math.round(Math.max(wa.x, Math.min(wa.x + wa.width - PET_W, x))),
+    Math.round(Math.max(wa.y, Math.min(wa.y + wa.height - PET_H, y)))
   )
 
   // After a while, jump down next to the window (clamped to the work area)
@@ -232,8 +259,8 @@ export function hangOnWindow(rect: { x: number; y: number; width: number; height
     isHanging = false
     if (!mainWindow || !isPetMode || mainWindow.isDestroyed()) return
     const [cx] = mainWindow.getPosition()
-    const jy = Math.max(0, Math.min(waH - PET_H, rect.y + rect.height + 24))
-    mainWindow.setPosition(Math.round(Math.max(0, Math.min(waW - PET_W, cx))), Math.round(jy))
+    const jy = Math.max(wa.y, Math.min(wa.y + wa.height - PET_H, dip.y + dip.height + 24))
+    mainWindow.setPosition(Math.round(Math.max(wa.x, Math.min(wa.x + wa.width - PET_W, cx))), Math.round(jy))
   }, 15000)
 }
 

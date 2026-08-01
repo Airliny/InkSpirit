@@ -49,7 +49,8 @@ export function registerChatHandlers(agent: Agent): void {
         }
       }
 
-      const stream = route === 'local'
+      let usedRoute = route
+      const stream = usedRoute === 'local'
         ? await chatWithLocalFallback()
         : await agent.chat(message)
 
@@ -58,6 +59,7 @@ export function registerChatHandlers(agent: Agent): void {
           return await agent.chatLocal(message)
         } catch {
           // Local model unavailable (Ollama stopped / model removed) — fall back to cloud
+          usedRoute = 'cloud'
           return agent.chat(message)
         }
       }
@@ -72,13 +74,15 @@ export function registerChatHandlers(agent: Agent): void {
       if (!win.isDestroyed()) win.webContents.send('agent:chat-done')
 
       // Only cache substantive replies — cold/terse responses (e.g. "（沉默）")
-      // shouldn't be reused verbatim
-      if (clientInfo && fullResponse.length >= 8) {
+      // shouldn't be reused verbatim. When the local route fell back to the
+      // cloud model, attribute the reply to the model that actually answered.
+      const answerInfo = usedRoute === 'cloud' ? agent.getActiveClientInfo() : clientInfo
+      if (answerInfo && fullResponse.length >= 8) {
         const mood = emotionToExpression(getCurrentEmotion().dominantEmotion)
-        setCachedReply(cacheKey(clientInfo.provider, clientInfo.model, `${mood}|${message}`), fullResponse)
+        setCachedReply(cacheKey(answerInfo.provider, answerInfo.model, `${mood}|${message}`), fullResponse)
       }
 
-      return { success: true, route }
+      return { success: true, route: usedRoute }
     } catch (error) {
       const raw = error instanceof Error ? error.message : 'Unknown error'
       const friendly = /401|403|api[_ ]?key|unauthorized|invalid.*key/i.test(raw)

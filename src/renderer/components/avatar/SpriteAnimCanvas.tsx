@@ -124,6 +124,9 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
       texture = g.createTexture()
       g.bindTexture(g.TEXTURE_2D, texture)
       g.pixelStorei(g.UNPACK_FLIP_Y_WEBGL, 1)
+      // Premultiply on upload so LINEAR filtering never blends junk RGB from
+      // transparent texels into sprite edges (the classic "green fringe")
+      g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1)
       g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, img)
       g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR)
       g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR)

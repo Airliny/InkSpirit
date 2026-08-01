@@ -103,7 +103,10 @@ export default function App() {
       const r = await window.inkAPI.chat(message)
       if (r.route === 'local' || r.route === 'cloud') setLastRoute(r.route)
       if (!r.success) {
-        appendAssistantChunk(r.budgetBlocked ? '预算已用完…我们先用本地模型聊天吧？' : '抱歉，我暂时无法回应...')
+        const msg = r.budgetBlocked
+          ? '预算已用完…我们先用本地模型聊天吧？'
+          : (r.error || '抱歉，我暂时无法回应...')
+        appendAssistantChunk(msg)
         finishAssistantMessage(); setExpression('sad')
       }
     } catch {
