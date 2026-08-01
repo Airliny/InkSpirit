@@ -11,6 +11,7 @@ import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay, emotionToExpressi
 import { getRelationship } from '../core/soul/relationship'
 import { tick, getPetState, type BehaviorImpulse } from '../core/autonomy/drives'
 import { pathToFileURL } from 'url'
+import { migrateToSecure } from '../core/secureStore'
 
 let agent: Agent
 let userIdleMs = 0
@@ -26,6 +27,10 @@ app.whenReady().then(() => {
   })
 
   getDatabase()
+  // Migrate legacy plaintext API keys to encrypted storage
+  for (const p of ['openai', 'anthropic', 'deepseek']) {
+    migrateToSecure(`${p}_api_key`)
+  }
   agent = new Agent()
   const win = createMainWindow()
   createTray(win)

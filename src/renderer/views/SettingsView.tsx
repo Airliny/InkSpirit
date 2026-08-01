@@ -36,7 +36,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
 
   useEffect(() => {
     window.inkAPI.getConfig('provider').then(v => { if (v) setProvider(v) })
-    window.inkAPI.getConfig('openai_api_key').then(v => { if (v) setApiKey(v) })
+    window.inkAPI.getSecureConfig('openai_api_key').then(v => { if (v) setApiKey(v) })
     window.inkAPI.getConfig('openai_model').then(v => { if (v) setModel(v) })
     window.inkAPI.getConfig('guardian_enabled').then(v => { if (v) setGuardianEnabled(v !== 'false') })
     window.inkAPI.getConfig('guardian_work_threshold_min').then(v => { if (v) setGuardianThreshold(v) })

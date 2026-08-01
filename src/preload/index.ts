@@ -7,6 +7,7 @@ const api = {
   getAgentState: () => ipcRenderer.invoke('agent:getState'),
   getConfig: (key: string) => ipcRenderer.invoke('config:get', key),
   setConfig: (key: string, value: string) => ipcRenderer.invoke('config:set', key, value),
+  getSecureConfig: (key: string) => ipcRenderer.invoke('config:getSecure', key),
 
   // Window
   setPetMode: () => ipcRenderer.invoke('window:setPetMode'),

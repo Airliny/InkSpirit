@@ -11,6 +11,7 @@ import {
 import { getRelationship, recordInteraction } from './soul/relationship'
 import { getDatabase } from './database'
 import { getConfig, setConfig } from './config'
+import { setSecureConfig, getSecureConfig } from './secureStore'
 import { uuidv4 } from './utils'
 import { recordUsage } from './cost/usage'
 
@@ -50,7 +51,7 @@ export class Agent {
 
     // DeepSeek & OpenAI: need API key
     if (!resolvedApiKey && provider !== 'ollama') {
-      const savedKey = getConfig(`${provider}_api_key`)
+      const savedKey = getSecureConfig(`${provider}_api_key`)
       if (savedKey) resolvedApiKey = savedKey
     }
 
@@ -64,9 +65,9 @@ export class Agent {
       temperature: 0.8
     }
 
-    // Save to config
+    // Save to config (API key encrypted)
     setConfig('provider', provider)
-    if (apiKey) setConfig(`${provider}_api_key`, apiKey)
+    if (apiKey) setSecureConfig(`${provider}_api_key`, apiKey)
     if (model) setConfig(`${provider}_model`, model)
     if (baseUrl && provider === 'ollama') setConfig('ollama_base_url', baseUrl)
 
@@ -110,7 +111,7 @@ export class Agent {
   private ensureClient(): IAIClient {
     if (!this.aiClient) {
       const provider = (getConfig('provider') as AIProvider) || 'openai'
-      const apiKey = getConfig(`${provider}_api_key`) || ''
+      const apiKey = getSecureConfig(`${provider}_api_key`) || ''
       const model = getConfig(`${provider}_model`) || undefined
       const defaults = PROVIDER_DEFAULTS[provider]
       this.configureProvider(provider, apiKey, model, undefined)

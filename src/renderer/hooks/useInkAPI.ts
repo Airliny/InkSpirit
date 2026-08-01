@@ -13,6 +13,7 @@ declare global {
       }>
       getConfig: (key: string) => Promise<string | null>
       setConfig: (key: string, value: string) => Promise<boolean>
+      getSecureConfig: (key: string) => Promise<string | null>
 
       // Window
       setPetMode: () => Promise<void>
