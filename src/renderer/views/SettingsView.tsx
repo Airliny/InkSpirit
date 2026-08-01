@@ -29,6 +29,10 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [pullingModel, setPullingModel] = useState('')
   const [pullProgress, setPullProgress] = useState(0)
   const [pullError, setPullError] = useState('')
+  const [routerEnabled, setRouterEnabled] = useState(true)
+  const [routerLocalModel, setRouterLocalModel] = useState<string | null>(null)
+  const [budgetInput, setBudgetInput] = useState('0')
+  const [costSummary, setCostSummary] = useState<any>(null)
 
   useEffect(() => {
     window.inkAPI.getConfig('provider').then(v => { if (v) setProvider(v) })
@@ -55,8 +59,25 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
       }
     })
     refreshOllama()
+    refreshCost()
     return () => { u1(); u2(); u3() }
   }, [])
+
+  async function refreshCost() {
+    const [router, summary] = await Promise.all([
+      window.inkAPI.getRouterSettings(),
+      window.inkAPI.getCostSummary()
+    ])
+    setRouterEnabled(router.enabled)
+    setRouterLocalModel(router.localModel)
+    setBudgetInput(String(summary.budgetUsd || 0))
+    setCostSummary(summary)
+  }
+
+  async function handleSaveBudget() {
+    await window.inkAPI.setCostBudget(Number(budgetInput) || 0)
+    refreshCost()
+  }
 
   async function refreshOllama() {
     const s = await window.inkAPI.getOllamaStatus()
@@ -261,6 +282,49 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
             </div>
           </>
         )}
+      </div>
+
+      <div className="settings-section">
+        <h4>成本控制</h4>
+        <div className="settings-form">
+          <label style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>智能路由（简单对话走本地模型）</span>
+            <input
+              type="checkbox"
+              checked={routerEnabled}
+              onChange={async e => {
+                setRouterEnabled(e.target.checked)
+                await window.inkAPI.setRouterEnabled(e.target.checked)
+              }}
+              style={{ width: 18, height: 18 }}
+            />
+          </label>
+          {routerEnabled && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {routerLocalModel
+                ? `本地模型：${routerLocalModel}（简短闲聊自动走本地，复杂问题走云端）`
+                : '未选择本地模型，请到"本地模型"区块选择"使用"'}
+            </div>
+          )}
+          <label>月度预算（USD，0 = 不限）
+            <input type="number" value={budgetInput} onChange={e => setBudgetInput(e.target.value)} min="0" step="0.5" />
+          </label>
+          <button className="settings-save-btn" onClick={handleSaveBudget}>保存预算</button>
+          {costSummary && (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+              <div>本月（{costSummary.month}）用量：{costSummary.totalTokens.toLocaleString()} tokens</div>
+              <div>费用：${costSummary.totalCostUsd.toFixed(3)} / 预算 ${costSummary.budgetUsd}</div>
+              {costSummary.budgetExceeded && (
+                <div style={{ color: '#ff6b6b' }}>预算已用完，云端请求将被拦截</div>
+              )}
+              {Object.entries(costSummary.entries).map(([p, e]: any) => (
+                <div key={p} style={{ color: 'var(--text-muted)' }}>
+                  {p}: {e.requests} 次 / ${e.costUsd.toFixed(3)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="settings-section">

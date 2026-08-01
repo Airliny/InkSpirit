@@ -79,6 +79,14 @@ const api = {
     return () => ipcRenderer.removeListener('update:progress', h)
   },
 
+  // Cost control
+  getCostSummary: () => ipcRenderer.invoke('cost:getSummary'),
+  setCostBudget: (usd: number) => ipcRenderer.invoke('cost:setBudget', usd),
+  setRouterEnabled: (enabled: boolean) => ipcRenderer.invoke('cost:setRouter', enabled),
+  getRouterSettings: () => ipcRenderer.invoke('cost:getRouter'),
+  clearResponseCache: () => ipcRenderer.invoke('cost:clearCache'),
+  getCacheSize: () => ipcRenderer.invoke('cost:getCacheSize'),
+
   // Pet behavior events (from autonomy loop)
   onPetBehavior: (cb: (data: { behavior: string }) => void) => {
     const h = (_e: Electron.IpcRendererEvent, d: { behavior: string }) => cb(d)

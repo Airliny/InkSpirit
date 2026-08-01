@@ -72,6 +72,21 @@ declare global {
       installUpdate: () => Promise<boolean>
       onUpdateStatus: (callback: (data: { state: string; version?: string; message?: string }) => void) => () => void
       onUpdateProgress: (callback: (data: { percent: number }) => void) => () => void
+
+      // Cost control
+      getCostSummary: () => Promise<{
+        month: string
+        entries: Record<string, { promptTokens: number; completionTokens: number; requests: number; costUsd: number }>
+        totalTokens: number
+        totalCostUsd: number
+        budgetUsd: number
+        budgetExceeded: boolean
+      }>
+      setCostBudget: (usd: number) => Promise<unknown>
+      setRouterEnabled: (enabled: boolean) => Promise<{ enabled: boolean; localModel: string | null; localAvailable: boolean }>
+      getRouterSettings: () => Promise<{ enabled: boolean; localModel: string | null; localAvailable: boolean }>
+      clearResponseCache: () => Promise<number>
+      getCacheSize: () => Promise<number>
     }
   }
 }

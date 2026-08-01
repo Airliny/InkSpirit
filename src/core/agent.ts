@@ -12,12 +12,20 @@ import { getRelationship, recordInteraction } from './soul/relationship'
 import { getDatabase } from './database'
 import { getConfig, setConfig } from './config'
 import { uuidv4 } from './utils'
+import { recordUsage } from './cost/usage'
 
 export class Agent {
   private aiClient: IAIClient | null = null
+  private localClient: IAIClient | null = null
   private conversationHistory: ChatMessage[] = []
   private currentConversationId: string | null = null
   private currentProvider: AIProvider = 'openai'
+  private currentModel: string = ''
+
+  constructor() {
+    const savedLocal = getConfig('local_model')
+    if (savedLocal) this.configureLocalModel(savedLocal)
+  }
 
   configureProvider(
     provider: AIProvider = 'openai',
@@ -63,7 +71,40 @@ export class Agent {
     if (baseUrl && provider === 'ollama') setConfig('ollama_base_url', baseUrl)
 
     this.currentProvider = provider
+    this.currentModel = effectiveModel
     this.aiClient = createProvider(config)
+  }
+
+  /** Configure the local (Ollama) model used by the smart router. Pass '' to disable. */
+  configureLocalModel(model: string): void {
+    if (!model) {
+      this.localClient = null
+      setConfig('local_model', '')
+      return
+    }
+    this.localClient = createProvider({
+      id: 'local',
+      provider: 'ollama',
+      apiKey: 'ollama',
+      baseUrl: getConfig('ollama_base_url') || PROVIDER_DEFAULTS.ollama.baseUrl,
+      model,
+      maxTokens: 1024,
+      temperature: 0.8
+    })
+    setConfig('local_model', model)
+  }
+
+  hasLocalModel(): boolean {
+    return !!this.localClient
+  }
+
+  getActiveClientInfo(): { provider: AIProvider; model: string } {
+    return { provider: this.currentProvider, model: this.currentModel }
+  }
+
+  getLocalClientInfo(): { provider: 'ollama'; model: string } | null {
+    if (!this.localClient) return null
+    return { provider: 'ollama', model: this.localClient.config.model }
   }
 
   private ensureClient(): IAIClient {
@@ -79,7 +120,22 @@ export class Agent {
 
   async chat(userMessage: string): Promise<AsyncGenerator<string, void, unknown>> {
     const client = this.ensureClient()
+    return this.streamWith(client, userMessage, this.currentProvider, this.currentModel)
+  }
 
+  async chatLocal(userMessage: string): Promise<AsyncGenerator<string, void, unknown>> {
+    if (!this.localClient) {
+      throw new Error('本地模型未配置')
+    }
+    return this.streamWith(this.localClient, userMessage, 'ollama', this.localClient.config.model)
+  }
+
+  private async streamWith(
+    client: IAIClient,
+    userMessage: string,
+    provider: AIProvider,
+    model: string
+  ): Promise<AsyncGenerator<string, void, unknown>> {
     if (!this.currentConversationId) {
       this.currentConversationId = uuidv4()
     }
@@ -146,6 +202,7 @@ export class Agent {
       self.conversationHistory.push({ role: 'assistant', content: fullResponse })
       self.saveConversation()
       recordInteraction()
+      recordUsage(provider, model, userMessage, fullResponse)
       analyzeConversationForMemories(userMessage, fullResponse, self.currentConversationId!).catch(() => {})
     }
 
