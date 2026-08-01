@@ -54,10 +54,14 @@ async function main() {
 
   // Create release
   console.log(`Creating release v${version}...`)
+  const notesPath = resolve(root, 'RELEASE_NOTES.md')
+  const body = existsSync(notesPath)
+    ? readFileSync(notesPath, 'utf8')
+    : `## InkSpirit ${version}\n\n自动发布：请补充本次更新内容。`
   const rel = JSON.parse(api('POST', `${API}/releases`, {
     tag_name: `v${version}`,
     name: `InkSpirit ${version}`,
-    body: `## InkSpirit ${version}\n\n自动发布：请补充本次更新内容。`,
+    body,
     draft: false,
     prerelease: false
   }))
