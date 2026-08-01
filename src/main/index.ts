@@ -533,21 +533,39 @@ function cleanupOrphanAvatars(): void {
     const avatarsDir = path.join(app.getPath('userData'), 'avatars')
     if (!fs.existsSync(avatarsDir)) return
 
-    const referenced = new Set<string>()
+    const referencedFiles = new Set<string>()
+    const referencedDirs = new Set<string>()
+
+    // Sprites: both current local:// and legacy file:// references
     const spriteKeys = ['idle', 'walk', 'sleep', 'sit', 'stretch', 'yawn', 'surprised', 'happy', 'sad', 'love']
     for (const k of spriteKeys) {
       const v = getConfig(`sprite_${k}`)
-      if (v && v.startsWith('local://')) {
-        referenced.add(decodeURIComponent(v.slice('local://'.length)))
+      if (!v) continue
+      if (v.startsWith('local://')) {
+        referencedFiles.add(decodeURIComponent(v.slice('local://'.length)))
+      } else if (v.startsWith('file://')) {
+        referencedFiles.add(v.replace(/^file:\/\/\/?/, ''))
       }
     }
+
+    // Live2D: keep the whole model folder (textures/motions), not just the json
     const l2d = getConfig('live2d_path')
-    if (l2d) referenced.add(l2d)
+    if (l2d) {
+      referencedFiles.add(l2d)
+      referencedDirs.add(path.dirname(l2d))
+    }
 
     for (const entry of fs.readdirSync(avatarsDir)) {
       const full = path.join(avatarsDir, entry)
-      if (!referenced.has(full)) {
-        fs.rmSync(full, { recursive: true, force: true })
+      let isDir = false
+      try { isDir = fs.statSync(full).isDirectory() } catch { continue }
+      if (isDir) {
+        // Keep referenced Live2D model folders, remove orphans
+        if (!referencedDirs.has(full)) {
+          fs.rmSync(full, { recursive: true, force: true })
+        }
+      } else if (!referencedFiles.has(full)) {
+        fs.rmSync(full, { force: true })
       }
     }
   } catch {
