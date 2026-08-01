@@ -17,6 +17,7 @@ if (!token) {
 const OWNER = 'Airliny'
 const REPO = 'InkSpirit'
 const API = `https://api.github.com/repos/${OWNER}/${REPO}`
+const UPLOADS = `https://uploads.github.com/repos/${OWNER}/${REPO}`
 
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 const version = pkg.version
@@ -65,11 +66,11 @@ async function main() {
 
   // Upload assets
   console.log('Uploading installer...')
-  console.log(JSON.parse(upload(`${API}/releases/${relId}/assets`, setup, `InkSpirit-Setup-${version}.exe`)).state)
+  console.log(JSON.parse(upload(`${UPLOADS}/releases/${relId}/assets`, setup, `InkSpirit-Setup-${version}.exe`)).state)
   console.log('Uploading latest.yml...')
-  console.log(JSON.parse(upload(`${API}/releases/${relId}/assets`, latestYml, 'latest.yml')).state)
+  console.log(JSON.parse(upload(`${UPLOADS}/releases/${relId}/assets`, latestYml, 'latest.yml')).state)
   console.log('Uploading blockmap...')
-  console.log(JSON.parse(upload(`${API}/releases/${relId}/assets`, blockmap, `InkSpirit-Setup-${version}.exe.blockmap`)).state)
+  console.log(JSON.parse(upload(`${UPLOADS}/releases/${relId}/assets`, blockmap, `InkSpirit-Setup-${version}.exe.blockmap`)).state)
 
   console.log(`\nPublished v${version}: https://github.com/${OWNER}/${REPO}/releases/tag/v${version}`)
 }
