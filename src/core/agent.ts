@@ -173,10 +173,16 @@ export class Agent {
       return this.namingResponse(nameMatch)
     }
 
-    // Content safety: semantic check before calling the model
-    const violation = await detectUnsafe(client, userMessage)
-    if (violation !== 'none') {
-      return this.safetyRefusal(violation)
+    // Content safety: semantic check before calling the model.
+    // Token-lean: skip ultra-short casual messages, prefer the free local
+    // model when available; the main model's own guardrails back us up.
+    const skipCheck = userMessage.trim().length <= 8
+    if (!skipCheck) {
+      const detector = this.localClient ?? client
+      const violation = await detectUnsafe(detector, userMessage)
+      if (violation !== 'none') {
+        return this.safetyRefusal(violation)
+      }
     }
 
     const sentiment = analyzeSentiment(userMessage)
@@ -259,9 +265,11 @@ export class Agent {
       self.saveConversation()
       recordInteraction()
       recordUsage(provider, model, userMessage, fullResponse)
-      // Semantic review of the reply: if the model slipped into unsafe content,
-      // don't let it into memory extraction or semantic distillation
-      const unsafeOut = await detectUnsafe(client, fullResponse)
+      // Semantic review of the reply: skip terse replies, prefer local model
+      const reviewDetector = self.localClient ?? client
+      const unsafeOut = fullResponse.trim().length <= 20
+        ? 'none' as const
+        : await detectUnsafe(reviewDetector, fullResponse)
       if (unsafeOut === 'none') {
         analyzeConversationForMemories(userMessage, fullResponse, self.currentConversationId!).catch(() => {})
         self.trySemanticMemory(client, userMessage, fullResponse).catch(() => {})
