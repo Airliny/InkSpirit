@@ -36,6 +36,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [autoLaunch, setAutoLaunch] = useState(false)
   const [dataMsg, setDataMsg] = useState('')
   const [soulState, setSoulState] = useState<any>(null)
+  const [personalityMode, setPersonalityMode] = useState('companion')
   const [storageInfo, setStorageInfo] = useState<any>(null)
 
   useEffect(() => {
@@ -79,6 +80,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     refreshCost()
     window.inkAPI.getAgentState().then(setSoulState)
     window.inkAPI.getStorageInfo().then(setStorageInfo)
+    window.inkAPI.getConfig('personality_mode').then(v => { if (v) setPersonalityMode(v) })
     return () => { u1(); u2(); u3() }
   }, [])
 
@@ -232,6 +234,31 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
 
       <div className="settings-section">
         <h4>灵魂状态</h4>
+        <div className="settings-form" style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>人格模式</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="settings-save-btn"
+              style={{ flex: 1, background: personalityMode === 'companion' ? 'var(--accent)' : 'var(--bg-tertiary)', color: personalityMode === 'companion' ? '#fff' : 'var(--text-primary)' }}
+              onClick={async () => {
+                setPersonalityMode('companion')
+                await window.inkAPI.setConfig('personality_mode', 'companion')
+              }}
+            >
+              陪伴模式
+            </button>
+            <button
+              className="settings-save-btn"
+              style={{ flex: 1, background: personalityMode === 'professional' ? 'var(--accent)' : 'var(--bg-tertiary)', color: personalityMode === 'professional' ? '#fff' : 'var(--text-primary)' }}
+              onClick={async () => {
+                setPersonalityMode('professional')
+                await window.inkAPI.setConfig('personality_mode', 'professional')
+              }}
+            >
+              专业模式
+            </button>
+          </div>
+        </div>
         {soulState ? (
           <div style={{ fontSize: 12, lineHeight: 1.8 }}>
             <div style={{ color: 'var(--text-secondary)' }}>

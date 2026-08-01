@@ -9,6 +9,7 @@ import {
   feelAppreciated, feelDisappointed, feelLonely, forgiveEmotion, isIgnoring
 } from './soul/emotion'
 import { getRelationship, recordInteraction } from './soul/relationship'
+import { addMemory } from './soul/memory'
 import { getDatabase } from './database'
 import { getConfig, setConfig } from './config'
 import { setSecureConfig, getSecureConfig } from './secureStore'
@@ -235,9 +236,44 @@ export class Agent {
       recordInteraction()
       recordUsage(provider, model, userMessage, fullResponse)
       analyzeConversationForMemories(userMessage, fullResponse, self.currentConversationId!).catch(() => {})
+      self.trySemanticMemory(client, userMessage, fullResponse).catch(() => {})
     }
 
     return wrappedStream()
+  }
+
+  /**
+   * Semantic memory: ask the AI to distill important facts about the user
+   * into a short long-term memory. Throttled to keep cost low.
+   */
+  private async trySemanticMemory(client: IAIClient, userMsg: string, assistantMsg: string): Promise<void> {
+    const now = Date.now()
+    const lastAt = Number(getConfig('last_semantic_memory_at') || 0)
+    if (now - lastAt < 30 * 60 * 1000) return
+
+    // Only bother when the conversation looks meaningful
+    const meaningful = /记住|生日|名字|喜欢|讨厌|爱|工作|项目|家人|朋友|猫|狗|计划|梦想|考试|面试|旅行|重要/.test(userMsg)
+    if (!meaningful && userMsg.length < 20) return
+
+    setConfig('last_semantic_memory_at', String(now))
+
+    const res = await client.chat([
+      {
+        role: 'system',
+        content: '你是砚灵，一个桌面伙伴，正在记录和用户的相处记忆。请把下面这段对话中，用户透露的关于自己的重要信息提炼成一条简短的长期记忆（20-40 字，第三人称）。只记录事实与感受，不要寒暄。如果没有值得记住的信息，只回复"无"。'
+      },
+      { role: 'user', content: `用户：${userMsg.slice(0, 300)}\n砚灵：${assistantMsg.slice(0, 300)}` }
+    ])
+
+    const summary = res.content.trim().replace(/^"|"$/g, '')
+    if (!summary || summary === '无' || summary.length < 4) return
+
+    addMemory(summary, {
+      type: 'semantic',
+      importance: 0.75,
+      tags: ['语义记忆'],
+      sourceConversationId: this.currentConversationId
+    })
   }
 
   private async *coldResponse(hostility: number, provider: AIProvider, model: string, userMessage: string): AsyncGenerator<string, void, unknown> {
