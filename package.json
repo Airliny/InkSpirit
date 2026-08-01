@@ -1,6 +1,6 @@
 {
   "name": "inkspirit",
-  "version": "0.3.1",
+  "version": "0.3.4",
   "description": "InkSpirit - AI Desktop Companion",
   "main": "./out/main/index.js",
   "scripts": {

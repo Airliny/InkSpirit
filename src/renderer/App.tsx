@@ -36,6 +36,7 @@ export default function App() {
   const [modelInfo, setModelInfo] = useState<{ provider: string; model: string; localModel: string | null }>({ provider: 'openai', model: '', localModel: null })
   const [lastRoute, setLastRoute] = useState<'local' | 'cloud' | null>(null)
   const [activity, setActivity] = useState<CompanionActivity>('idle')
+  const [petName, setPetName] = useState('')
 
   // M3: activity timers — the body only reflects the real pipeline, and it
   // NEVER stays in thinking forever (slow model / network hang → recover)
@@ -98,6 +99,10 @@ export default function App() {
       try {
         const info = await window.inkAPI.getModelInfo()
         setModelInfo(info)
+      } catch {}
+      try {
+        const name = await window.inkAPI.getConfig('pet_name')
+        if (name) setPetName(name)
       } catch {}
       setLoading(false)
     }
@@ -199,22 +204,13 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <div className="title-bar">
-        <span className="title-text">InkSpirit</span>
-        <div className="title-actions">
-          <button className="title-btn" onClick={() => setPanel(panel === 'settings' ? 'chat' : 'settings')}>
-            {panel === 'settings' ? '\u2709' : '\u2699'}
-          </button>
-          <button className="title-btn" onClick={handleBackToPet}>&#8722;</button>
-        </div>
-      </div>
       <div className="main-content">
         <div style={{ display: panel === 'chat' ? 'flex' : 'none', height: '100%' }}>
-          <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} activity={activity} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onHeaderClick={handleBackToPet} active={panel === 'chat'} />
+          <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} activity={activity} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onBackToPet={handleBackToPet} onOpenSettings={() => setPanel('settings')} active={panel === 'chat'} petName={petName} />
         </div>
         <div style={{ display: panel === 'settings' ? 'block' : 'none', height: '100%' }}>
           <ErrorBoundary>
-            <SettingsView modelSource={modelSource} onModelSourceChange={setModelSource} onBack={() => setPanel('chat')} />
+            <SettingsView modelSource={modelSource} onModelSourceChange={setModelSource} onBack={() => setPanel('chat')} onBackToPet={handleBackToPet} />
           </ErrorBoundary>
         </div>
       </div>

@@ -1,0 +1,122 @@
+/* =============================================
+   砚灵 InkSpirit — Design Tokens
+   苹果式：大面积留白 + 克制的强调色
+   ============================================= */
+
+:root {
+  /* 主色 — 仅用于激活状态/按钮/进度/光效 */
+  --ink-primary: #66ccff;
+  --ink-primary-deep: #38bdf8;
+  --ink-soft: rgba(102, 204, 255, 0.14);
+  --ink-strong: rgba(102, 204, 255, 0.35);
+
+  /* 背景与表面 */
+  --bg: #f8fafc;
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-solid: #ffffff;
+  --surface-hover: rgba(255, 255, 255, 0.92);
+  --surface-strong: rgba(255, 255, 255, 0.96);
+  --surface-muted: rgba(15, 23, 42, 0.04);
+
+  /* 文本 */
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+
+  /* 分隔与边框 */
+  --border: rgba(15, 23, 42, 0.07);
+  --border-strong: rgba(15, 23, 42, 0.14);
+
+  /* 功能色 */
+  --green: #34c759;
+  --orange: #ff9f0a;
+  --red: #ff3b30;
+
+  /* 圆角 — 统一 */
+  --radius-small: 12px;
+  --radius-medium: 20px;
+  --radius-large: 28px;
+
+  /* 动效 — 砚灵应该安静 */
+  --transition-fast: 150ms;
+  --transition-normal: 250ms;
+  --transition-slow: 400ms;
+  --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* 阴影与玻璃 */
+  --shadow-soft: 0 2px 12px rgba(15, 23, 42, 0.06);
+  --shadow-panel: 0 16px 48px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.06);
+  --blur-panel: 24px;
+
+  --font: -apple-system, 'SF Pro Text', 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+
+  /* ===== 旧变量别名（过渡期兼容，新组件一律用新 token） ===== */
+  --accent: var(--ink-primary);
+  --accent-deep: var(--ink-primary-deep);
+  --accent-soft: var(--ink-soft);
+  --accent-strong: var(--ink-strong);
+  --bg-secondary: var(--surface-muted);
+  --bg-tertiary: rgba(15, 23, 42, 0.06);
+  --separator: var(--border);
+  --separator-strong: var(--border-strong);
+  --radius-xl: var(--radius-large);
+  --radius-lg: var(--radius-medium);
+  --radius-md: var(--radius-small);
+  --radius-sm: 8px;
+}
+
+[data-theme='dark'] {
+  --ink-primary: #66ccff;
+  --ink-primary-deep: #7dd3fc;
+  --ink-soft: rgba(102, 204, 255, 0.16);
+  --ink-strong: rgba(102, 204, 255, 0.4);
+
+  --bg: #111827;
+  --surface: rgba(30, 41, 59, 0.72);
+  --surface-solid: #1f2937;
+  --surface-hover: rgba(51, 65, 85, 0.92);
+  --surface-strong: rgba(30, 41, 59, 0.96);
+  --surface-muted: rgba(255, 255, 255, 0.04);
+
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --text-tertiary: #6b7280;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --shadow-soft: 0 2px 12px rgba(0, 0, 0, 0.3);
+  --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+
+  --accent-strong: var(--ink-strong);
+  --bg-tertiary: rgba(255, 255, 255, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] {
+    --ink-primary: #66ccff;
+    --ink-primary-deep: #7dd3fc;
+    --ink-soft: rgba(102, 204, 255, 0.16);
+    --ink-strong: rgba(102, 204, 255, 0.4);
+
+    --bg: #111827;
+    --surface: rgba(30, 41, 59, 0.72);
+    --surface-solid: #1f2937;
+    --surface-hover: rgba(51, 65, 85, 0.92);
+    --surface-strong: rgba(30, 41, 59, 0.96);
+    --surface-muted: rgba(255, 255, 255, 0.04);
+
+    --text-primary: #f9fafb;
+    --text-secondary: #9ca3af;
+    --text-tertiary: #6b7280;
+
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+
+    --shadow-soft: 0 2px 12px rgba(0, 0, 0, 0.3);
+    --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+
+    --accent-strong: var(--ink-strong);
+    --bg-tertiary: rgba(255, 255, 255, 0.06);
+  }
+}

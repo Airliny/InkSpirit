@@ -46,6 +46,13 @@ export function clearConfigCache(): void {
   cache.clear()
 }
 
+/** 测试接缝：重置语句句柄（换库后旧句柄失效，vitest only） */
+export function resetConfigStatementsForTest(): void {
+  stmtGet = null
+  stmtSet = null
+  cache.clear()
+}
+
 /** Warm the cache from the DB at startup */
 export function preloadConfig(): void {
   try {

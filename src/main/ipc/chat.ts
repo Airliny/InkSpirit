@@ -63,25 +63,56 @@ export function registerChatHandlers(agent: Agent): void {
       }
 
       let usedRoute = route
-      const stream = usedRoute === 'local'
-        ? await chatWithLocalFallback()
-        : await agent.chat(message)
+      let fullResponse = ''
+      const liveWin = win
+
+      // 流式消费：把 chunk 发给渲染进程，返回完整回复
+      async function drainStream(stream: AsyncGenerator<string, void, unknown>): Promise<string> {
+        let full = ''
+        for await (const chunk of stream) {
+          full += chunk
+          if (liveWin.isDestroyed()) break
+          liveWin.webContents.send('agent:chat-chunk', chunk)
+        }
+        return full
+      }
+
+      // 大脑降级策略：主大脑失败 → 尝试本地大脑 → 都没有才失败
+      if (usedRoute === 'local') {
+        try {
+          fullResponse = await drainStream(await chatWithLocalFallback())
+        } catch {
+          // local model unavailable (Ollama stopped / model removed) — fall back to cloud
+          usedRoute = 'cloud'
+          fullResponse = await drainStream(await agent.chat(message))
+        }
+      } else {
+        try {
+          fullResponse = await drainStream(await agent.chat(message))
+        } catch (cloudError) {
+          // 云端大脑暂时不可用（限流/网络/Key 失效）→ 降到本地大脑
+          const local = agent.getLocalClientInfo()
+          if (local) {
+            try {
+              fullResponse = await drainStream(await agent.chatLocal(message))
+              usedRoute = 'local'
+            } catch {
+              throw cloudError
+            }
+          } else {
+            throw cloudError
+          }
+        }
+      }
 
       async function chatWithLocalFallback() {
         try {
           return await agent.chatLocal(message)
         } catch {
-          // Local model unavailable (Ollama stopped / model removed) — fall back to cloud
+          // local model unavailable (Ollama stopped / model removed) — fall back to cloud
           usedRoute = 'cloud'
           return agent.chat(message)
         }
-      }
-
-      let fullResponse = ''
-      for await (const chunk of stream) {
-        fullResponse += chunk
-        if (win.isDestroyed()) break
-        win.webContents.send('agent:chat-chunk', chunk)
       }
 
       if (!win.isDestroyed()) win.webContents.send('agent:chat-done')
@@ -99,19 +130,21 @@ export function registerChatHandlers(agent: Agent): void {
     } catch (error) {
       const raw = error instanceof Error ? error.message : 'Unknown error'
       const friendly = /401|403|api[_ ]?key|unauthorized|invalid.*key/i.test(raw)
-        ? 'API Key 无效或未配置，请到设置中检查'
-        : /ECONNREFUSED|fetch failed|network/i.test(raw)
-          ? '无法连接模型服务，请检查网络或 Ollama 是否启动'
+        ? '大脑的钥匙好像不对…请到设置里检查一下 API Key'
+        : /ECONNREFUSED|fetch failed|network|timeout|socket/i.test(raw)
+          ? '当前大脑暂时无法连接，我可以等一会儿…你也可以稍后再试试。'
           : raw
       return { success: false, error: friendly }
     }
   })
 
   ipcMain.handle('agent:getState', () => {
+    const rel = agent.getRelationshipState()
     return {
       emotion: agent.getEmotionState(),
       personality: agent.getPersonality(),
       relationshipStage: agent.getRelationshipStage(),
+      relationship: rel,
       history: agent.getConversationHistory(),
       memories: countMemories()
     }
@@ -154,6 +187,17 @@ export function registerChatHandlers(agent: Agent): void {
     try {
       agent.configureProvider(provider as any, apiKey, model, baseUrl)
       return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
+  })
+
+  ipcMain.handle('agent:testConnection', async (_event, provider: string, apiKey?: string, model?: string, baseUrl?: string) => {
+    try {
+      return await agent.testConnection(provider as any, apiKey || '', model || '', baseUrl || '')
     } catch (error) {
       return {
         success: false,

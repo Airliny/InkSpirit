@@ -89,3 +89,13 @@ export function closeDatabase(): void {
   }
   dbState = null
 }
+
+/** 测试接缝：把单例指向内存库（vitest only，生产代码不调用） */
+export function useInMemoryDatabaseForTest(): void {
+  const d = new Database(':memory:')
+  d.pragma('journal_mode = WAL')
+  d.pragma('foreign_keys = ON')
+  runMigrations(d)
+  db = d
+  dbState = { status: 'healthy', lastError: null, backupAvailable: false }
+}

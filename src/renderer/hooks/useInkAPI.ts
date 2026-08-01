@@ -17,6 +17,8 @@ declare global {
       getConfig: (key: string) => Promise<string | null>
       setConfig: (key: string, value: string) => Promise<boolean>
       getSecureConfig: (key: string) => Promise<string | null>
+      testConnection: (provider: string, apiKey?: string, model?: string, baseUrl?: string) =>
+        Promise<{ success: boolean; latencyMs?: number; error?: string }>
 
       // Window
       setPetMode: () => Promise<void>

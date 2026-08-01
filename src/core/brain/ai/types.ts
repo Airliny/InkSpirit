@@ -3,13 +3,19 @@ export interface ChatMessage {
   content: string
 }
 
-export type AIProvider = 'openai' | 'anthropic' | 'deepseek' | 'ollama'
+export type AIProvider = 'openai' | 'anthropic' | 'deepseek' | 'ollama' | 'custom'
 
 export const PROVIDER_DEFAULTS: Record<AIProvider, { baseUrl: string; defaultModel: string }> = {
   openai:    { baseUrl: '',                              defaultModel: 'gpt-4o-mini' },
   anthropic: { baseUrl: 'https://api.anthropic.com',     defaultModel: 'claude-sonnet-4-20250514' },
   deepseek:  { baseUrl: 'https://api.deepseek.com',      defaultModel: 'deepseek-chat' },
-  ollama:    { baseUrl: 'http://localhost:11434/v1',     defaultModel: 'llama3' }
+  ollama:    { baseUrl: 'http://localhost:11434/v1',     defaultModel: 'llama3' },
+  custom:    { baseUrl: '',                              defaultModel: '' }
+}
+
+/** 自定义 API 必须由用户提供完整配置（地址/Key/模型），无官方默认值 */
+export function isCustomProvider(p: AIProvider): boolean {
+  return p === 'custom'
 }
 
 export interface ChatResponse {

@@ -14,14 +14,16 @@ interface ChatViewProps {
   modelInfo: { provider: string; model: string; localModel: string | null }
   lastRoute: 'local' | 'cloud' | null
   onSend: (message: string) => void
-  onHeaderClick: () => void
+  onBackToPet: () => void
+  onOpenSettings: () => void
   /** true while the chat panel is the visible panel */
   active: boolean
   /** M3: conversation body state (listening/thinking/speaking/…) */
   activity?: string
+  petName?: string
 }
 
-export function ChatView({ modelSource, state, messages, isStreaming, modelInfo, lastRoute, onSend, onHeaderClick, active, activity }: ChatViewProps) {
+export function ChatView({ modelSource, state, messages, isStreaming, modelInfo, lastRoute, onSend, onBackToPet, onOpenSettings, active, activity, petName }: ChatViewProps) {
   const bubblesRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<ChatInputHandle>(null)
   const didInit = useRef(false)
@@ -86,31 +88,61 @@ export function ChatView({ modelSource, state, messages, isStreaming, modelInfo,
     if (isNearBottom(el)) el.scrollTop = el.scrollHeight
   }, [messages])
 
+  const providerLabels: Record<string, string> = {
+    openai: 'OpenAI', anthropic: 'Claude', deepseek: 'DeepSeek', ollama: 'Ollama', custom: '自定义'
+  }
   const modelLabel = lastRoute === 'local' && modelInfo.localModel
     ? `本地 · ${modelInfo.localModel}`
-    : `${modelInfo.provider} · ${modelInfo.model || '未配置'}`
+    : `${providerLabels[modelInfo.provider] ?? modelInfo.provider} · ${modelInfo.model || '未配置'}`
+
+  const name = petName || '砚灵'
 
   return (
     <div className="chat-panel">
-      <div className="chat-pet-avatar" onClick={onHeaderClick}>
-        {modelSource.type === 'live2d' ? (
-          <Live2DView modelPath={modelSource.live2d.modelPath} state={state} width={72} height={72} />
-        ) : (
-          <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={state} size={72} />
-        )}
+      <div className="companion-header">
+        <div className="companion-avatar" onClick={onBackToPet} title="回到桌面">
+          {modelSource.type === 'live2d' ? (
+            <Live2DView modelPath={modelSource.live2d.modelPath} state={state} width={44} height={44} />
+          ) : (
+            <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={state} size={44} />
+          )}
+        </div>
+        <div className="companion-id">
+          <div className="companion-name" onClick={onBackToPet}>{name}</div>
+          <div className="companion-status">
+            <span className="companion-status-dot" />
+            在线
+          </div>
+        </div>
+        <div className="companion-actions">
+          <button className="title-btn" onClick={onOpenSettings} title="设置">&#9881;</button>
+          <button className="title-btn" onClick={onBackToPet} title="回到桌面">&#8722;</button>
+        </div>
       </div>
       <div className="chat-bubbles" ref={bubblesRef}>
         {messages.length === 0 && (
-          <div className="chat-empty">
-            <div className="chat-empty-bubble">你好，我是你的桌面伙伴。</div>
-            <div className="chat-empty-bubble delay">可以随时点击我聊天。</div>
+          <div className="chat-presence">
+            <div className="chat-presence-avatar">
+              {modelSource.type === 'live2d' ? (
+                <Live2DView modelPath={modelSource.live2d.modelPath} state={state} width={76} height={76} />
+              ) : (
+                <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={state} size={76} />
+              )}
+            </div>
+            <div className="chat-presence-text">
+              <strong>{name}</strong> 在这里。
+              <br />
+              你好，今天是我们第一次见面。
+              <br />
+              有什么事情想和我聊聊吗？
+            </div>
           </div>
         )}
         {messages.map((msg, i) => (
           <ChatBubble key={i} role={msg.role} content={msg.content} isStreaming={isStreaming && i === messages.length - 1 && msg.role === 'assistant'} />
         ))}
       </div>
-      <ChatInput ref={inputRef} onSend={onSend} disabled={isStreaming} />
+      <ChatInput ref={inputRef} onSend={onSend} disabled={isStreaming} placeholder={`和${name}说点什么...`} />
       <div className="chat-model-label">{modelLabel}</div>
     </div>
   )

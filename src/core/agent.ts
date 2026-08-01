@@ -55,7 +55,7 @@ export class Agent {
   ): void {
     const defaults = PROVIDER_DEFAULTS[provider]
     const effectiveBaseUrl = baseUrl || defaults.baseUrl
-    const effectiveModel = model || defaults.defaultModel
+    let effectiveModel = model || defaults.defaultModel
 
     let resolvedApiKey = apiKey
     let resolvedBaseUrl = effectiveBaseUrl
@@ -66,6 +66,13 @@ export class Agent {
       if (!baseUrl) {
         resolvedBaseUrl = getConfig('ollama_base_url') || defaults.baseUrl
       }
+    }
+
+    // 自定义 API：地址/Key/模型全部来自用户配置（无官方默认值）
+    if (provider === 'custom') {
+      if (!baseUrl) resolvedBaseUrl = getConfig('custom_base_url') || ''
+      if (!model) effectiveModel = getConfig('custom_model') || ''
+      if (!resolvedApiKey) resolvedApiKey = getSecureConfig('custom_api_key') || ''
     }
 
     // DeepSeek & OpenAI: need API key
@@ -87,13 +94,75 @@ export class Agent {
     // Save to config (API key encrypted). Save even when empty so the user
     // can clear a stored key by clearing the field.
     setConfig('provider', provider)
+    setConfig(`brain_last_used_${provider}`, String(Date.now()))
     if (apiKey !== undefined) setSecureConfig(`${provider}_api_key`, apiKey)
     if (model) setConfig(`${provider}_model`, model)
-    if (baseUrl && provider === 'ollama') setConfig('ollama_base_url', baseUrl)
+    if (baseUrl && (provider === 'ollama' || provider === 'custom')) {
+      setConfig(`${provider}_base_url`, baseUrl)
+    }
 
     this.currentProvider = provider
     this.currentModel = effectiveModel
     this.aiClient = createProvider(config)
+  }
+
+  /**
+   * 连接测试：用临时配置做一次最小请求，返回延迟（ms）。不触碰已保存的配置。
+   * 供设置页「测试连接」使用。
+   */
+  async testConnection(
+    provider: AIProvider,
+    apiKey: string = '',
+    model: string = '',
+    baseUrl: string = ''
+  ): Promise<{ success: boolean; latencyMs?: number; error?: string }> {
+    const defaults = PROVIDER_DEFAULTS[provider]
+    const effectiveBaseUrl = baseUrl || defaults.baseUrl || getConfig(`${provider}_base_url`) || ''
+    const effectiveModel = model || defaults.defaultModel || getConfig(`${provider}_model`) || ''
+    let resolvedKey = apiKey
+
+    if (provider === 'ollama') {
+      resolvedKey = 'ollama'
+    } else if (!resolvedKey) {
+      resolvedKey = getSecureConfig(`${provider}_api_key`) || ''
+    }
+
+    if (provider !== 'ollama' && !resolvedKey) {
+      return { success: false, error: '请先填写 API Key' }
+    }
+    if (provider === 'custom' && !effectiveBaseUrl) {
+      return { success: false, error: '请先填写 API 地址' }
+    }
+    if (provider === 'custom' && !effectiveModel) {
+      return { success: false, error: '请先填写模型名称' }
+    }
+
+    const client = createProvider({
+      id: 'test',
+      provider,
+      apiKey: resolvedKey,
+      baseUrl: effectiveBaseUrl || undefined,
+      model: effectiveModel,
+      maxTokens: 8,
+      temperature: 0
+    })
+
+    const start = Date.now()
+    try {
+      if (provider === 'ollama') {
+        const ok = await withTimeout(client.healthCheck(), 15_000)
+        if (!ok) return { success: false, error: '无法连接 Ollama 服务，请确认已启动' }
+      } else {
+        const res = await withTimeout(
+          client.chat([{ role: 'user', content: 'ping' }]),
+          20_000
+        )
+        if (!res.content) return { success: false, error: '模型返回为空' }
+      }
+      return { success: true, latencyMs: Date.now() - start }
+    } catch (error) {
+      return { success: false, error: friendlyAITestError(error) }
+    }
   }
 
   /** Configure the local (Ollama) model used by the smart router. Pass '' to disable. */
@@ -511,6 +580,7 @@ export class Agent {
   getEmotionState() { return getCurrentEmotion() }
   getPersonality() { return getActivePersonality().traits }
   getRelationshipStage(): string { return getRelationship().stage }
+  getRelationshipState() { return getRelationship() }
   getCurrentProvider(): AIProvider { return this.currentProvider }
 }
 
@@ -523,9 +593,31 @@ function createProvider(config: AIProviderConfig): IAIClient {
     case 'openai':
     case 'deepseek':
     case 'ollama':
+    case 'custom':
     default:
       return new OpenAIProvider(config)
   }
+}
+
+/** 超时包装：避免网络挂起让测试/请求永远不返回 */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('连接超时')), ms)
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) }
+    )
+  })
+}
+
+/** 把底层错误翻译成用户能看懂的话 */
+function friendlyAITestError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : 'Unknown error'
+  if (/timed? ?out|timeout/i.test(raw)) return '连接超时，请检查地址与网络'
+  if (/401|403|api[_ ]?key|unauthorized|invalid.*key|authentication/i.test(raw)) return 'API Key 无效或无权限'
+  if (/404/i.test(raw)) return '地址或模型不存在（404）'
+  if (/ECONNREFUSED|fetch failed|network|socket/i.test(raw)) return '无法连接，请检查地址与网络'
+  return raw
 }
 
 // --- Sentiment analysis ---

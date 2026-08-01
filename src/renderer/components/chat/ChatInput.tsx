@@ -3,13 +3,14 @@ import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 interface ChatInputProps {
   onSend: (message: string) => void
   disabled?: boolean
+  placeholder?: string
 }
 
 export interface ChatInputHandle {
   focus: () => void
 }
 
-export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({ onSend, disabled }, ref) {
+export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({ onSend, disabled, placeholder }, ref) {
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -42,7 +43,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="想说点什么..."
+        placeholder={placeholder ?? '和砚灵说点什么...'}
         disabled={disabled}
       />
       <button
