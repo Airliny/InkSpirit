@@ -6,8 +6,9 @@ import { getDatabase, closeDatabase } from '../core/database'
 import { Agent } from '../core/agent'
 import { markActive, markIdle, getTotalWorkMinutes } from './perception/timeTracker'
 import { getForegroundWindow } from './perception/windowScanner'
+import { classifyForeground, isDoNotDisturb, type ForegroundScene } from './perception/sceneDetector'
 import { hangOnWindow } from './windowManager'
-import { startGuardian } from './guardian/guardian'
+import { startGuardian, setGuardianDisturbBlocked } from './guardian/guardian'
 import { initUpdater } from './updater/updater'
 import { getCurrentEmotion, forgiveEmotion, applyEmotionDecay, emotionToExpression, flushEmotion, type EmotionState } from '../core/soul/emotion'
 import { getRelationship } from '../core/soul/relationship'
@@ -25,6 +26,7 @@ let agent: Agent
 let userIdleMs = 0
 let totalWorkMin = 0
 let lastImpulseWasAt = Date.now()
+let currentScene: ForegroundScene = 'work'
 
 app.whenReady().then(() => {
   console.log(`[InkSpirit] v${app.getVersion()} starting. userData: ${app.getPath('userData')}`)
@@ -47,6 +49,7 @@ app.whenReady().then(() => {
   createTray(win)
   registerIpcHandlers(agent)
   startPerception()
+  startSceneWatcher()
   startHeartbeat()
   startGuardian()
   startMoodSync()
@@ -205,10 +208,33 @@ function emitIdleBehavior(): void {
   }
 }
 
+// ---- Scene awareness: what kind of app the user is in (for don't-disturb) ----
+
+function startSceneWatcher(): void {
+  const update = async () => {
+    if (userIdleMs > 120000) return // user away — scene doesn't matter
+    const win = await getForegroundWindow()
+    if (!win) return
+    // Skip our own window
+    if (/inkspirit|砚灵/i.test(win.title)) return
+    const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
+    const fullscreen = win.width >= sw - 40 && win.height >= sh - 40
+    currentScene = fullscreen ? 'game' : classifyForeground(win.title)
+    setGuardianDisturbBlocked(isDisturbing())
+  }
+  update()
+  setInterval(update, 90000)
+}
+
+function isDisturbing(): boolean {
+  return isDoNotDisturb(currentScene)
+}
+
 // ---- Proactive actions: the pet actively finds things to do ----
 
 function maybeProactiveAction(): void {
   if (userIdleMs > 90000) return // user is away — don't disturb
+  if (isDisturbing()) return // meeting/game/video — stay quiet
   const emotion = getCurrentEmotion()
   const style = getBehaviorStyle()
   const r = Math.random()
@@ -254,6 +280,7 @@ const HANG_COOLDOWN_MS = 5 * 60 * 1000
 
 async function maybeHangOnWindow(): Promise<void> {
   if (userIdleMs > 90000) return
+  if (isDisturbing()) return
   if (Date.now() - lastHangAt < HANG_COOLDOWN_MS) return
 
   const win = await getForegroundWindow()
@@ -273,6 +300,7 @@ async function maybeHangOnWindow(): Promise<void> {
 
 // ---- Daily rituals: morning greeting & good night, once per day ----
 function maybeDailyRitual(): void {
+  if (isDisturbing()) return
   const hour = new Date().getHours()
   const today = new Date().toDateString()
   const lastGreeting = getConfig('last_greeting_date')

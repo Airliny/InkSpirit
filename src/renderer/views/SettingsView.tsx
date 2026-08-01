@@ -37,6 +37,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
   const [dataMsg, setDataMsg] = useState('')
   const [soulState, setSoulState] = useState<any>(null)
   const [personalityMode, setPersonalityMode] = useState('companion')
+  const [petName, setPetName] = useState('')
   const [storageInfo, setStorageInfo] = useState<any>(null)
 
   useEffect(() => {
@@ -81,6 +82,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
     window.inkAPI.getAgentState().then(setSoulState)
     window.inkAPI.getStorageInfo().then(setStorageInfo)
     window.inkAPI.getConfig('personality_mode').then(v => { if (v) setPersonalityMode(v) })
+    window.inkAPI.getConfig('pet_name').then(v => { if (v) setPetName(v) })
     return () => { u1(); u2(); u3() }
   }, [])
 
@@ -262,7 +264,8 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack }: Setti
         {soulState ? (
           <div style={{ fontSize: 12, lineHeight: 1.8 }}>
             <div style={{ color: 'var(--text-secondary)' }}>
-              关系阶段：<span style={{ fontWeight: 600 }}>{stageLabel(soulState.relationshipStage)}</span>
+              名字：<span style={{ fontWeight: 600 }}>{petName || '未命名（跟它说"给你起个名字叫XX"）'}</span>
+               ｜ 关系：<span style={{ fontWeight: 600 }}>{stageLabel(soulState.relationshipStage)}</span>
                ｜ 主导情绪：<span style={{ fontWeight: 600 }}>{emotionLabel(soulState.emotion?.dominantEmotion)}</span>
             </div>
             {soulState.memories && (

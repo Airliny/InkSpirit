@@ -6,6 +6,13 @@ import { getDatabase } from '../../core/database'
 import { uuidv4 } from '../../core/utils'
 import { getBehaviorStyle, type ReminderTone } from '../../core/soul/personality'
 
+let disturbBlocked = false
+
+/** Scene awareness: set externally (main process scene watcher) */
+export function setGuardianDisturbBlocked(blocked: boolean): void {
+  disturbBlocked = blocked
+}
+
 interface GuardianSettings {
   enabled: boolean
   workThresholdMin: number
@@ -42,6 +49,15 @@ export function startGuardian(): () => void {
     if (isIdle) {
       wasIdle = true
       workStreakStart = 0
+      return
+    }
+
+    if (disturbBlocked) {
+      // In a meeting/game/video — hold the streak but don't remind
+      if (wasIdle) {
+        wasIdle = false
+        workStreakStart = Date.now()
+      }
       return
     }
 

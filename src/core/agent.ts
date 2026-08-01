@@ -160,6 +160,18 @@ export class Agent {
       this.currentConversationId = uuidv4()
     }
 
+    // Naming: if the user gives the pet a name, remember it for good
+    const nameMatch = extractGivenName(userMessage)
+    if (nameMatch) {
+      setConfig('pet_name', nameMatch)
+      addMemory(`用户给我起名叫「${nameMatch}」`, {
+        type: 'semantic',
+        importance: 0.9,
+        tags: ['名字']
+      })
+      return this.namingResponse(nameMatch)
+    }
+
     const sentiment = analyzeSentiment(userMessage)
 
     if (isIgnoring() && sentiment.hostility > 0.3) {
@@ -281,8 +293,23 @@ export class Agent {
     })
   }
 
-  private async *coldResponse(hostility: number, provider: AIProvider, model: string, userMessage: string): AsyncGenerator<string, void, unknown> {
-    const responses = hostility > 0.7
+  private async *namingResponse(name: string): AsyncGenerator<string, void, unknown> {
+    const responses = [
+      `（愣了一下，心里一暖）…${name}。嗯，我喜欢这个名字。`,
+      `${name}…（轻轻念了一遍）从今天起，这就是我的名字了。`,
+      `（眼睛亮了）你叫我${name}？好，我记住了。`
+    ]
+    const msg = responses[Math.floor(Math.random() * responses.length)]
+    this.conversationHistory.push({ role: 'assistant', content: msg })
+    if (this.conversationHistory.length > 50) {
+      this.conversationHistory = this.conversationHistory.slice(-50)
+    }
+    this.saveConversation()
+    recordInteraction()
+    yield msg
+  }
+
+  private async *coldResponse(hostility: number, provider: AIProvider, model: string, userMessage: string): AsyncGenerator<string, void, unknown> {    const responses = hostility > 0.7
       ? ['（转过身去，不理你）', '（沉默）']
       : ['...', '（没有看你）', '嗯。']
     const msg = responses[Math.floor(Math.random() * responses.length)]
@@ -374,4 +401,28 @@ function analyzeSentiment(text: string): Sentiment {
   const lonely = lonelyWords.some(w => lower.includes(w))
 
   return { hostility, kindness, scared, jealous, disappointed, lonely }
+}
+
+// --- Naming detection ---
+
+/** Detect "I'll name you X" patterns and extract the name */
+function extractGivenName(text: string): string | null {
+  const patterns = [
+    /给你(起个|取个|起)?名字叫\s*[「「]?([\u4e00-\u9fa5A-Za-z0-9]{1,8})[」」]?/,
+    /(?:给你|帮你)取个名字[，,]\s*叫\s*([\u4e00-\u9fa5A-Za-z0-9]{1,8})/,
+    /名字叫\s*([\u4e00-\u9fa5A-Za-z0-9]{1,8})/,
+    /(?:以后|从今天起)叫你\s*([\u4e00-\u9fa5A-Za-z0-9]{1,8})/
+  ]
+  // Words that shouldn't be mistaken for a name
+  const BAD_NAMES = new Set(['别跑', '别动', '不说话', '闭嘴', '去死', '滚', '笨蛋', '傻子', '不要', '闭嘴了'])
+
+  for (const p of patterns) {
+    const m = text.match(p)
+    if (m && m[1]) {
+      const name = m[1].trim()
+      if (name.length === 0 || BAD_NAMES.has(name)) continue
+      return name
+    }
+  }
+  return null
 }

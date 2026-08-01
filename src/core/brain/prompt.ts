@@ -60,7 +60,10 @@ function buildPersona(ctx: PromptContext): string {
     : '你是一个桌面伙伴，生活在用户的电脑里。'
 
   const timeHint = getTimeHint()
-  const nameRules = `你没有预设的名字——如果用户给你起名字，你不会立刻接受，但会在长期相处中慢慢把它当作自己的名字。`
+  const petName = getConfig('pet_name')
+  const nameRules = petName
+    ? `用户给你起的名字是「${petName}」。这是用户送给你的名字，你发自内心地喜欢它，会自然地用这个名字称呼自己（比如「${petName}来啦」），也接受用户这样叫你。`
+    : `你现在还没有名字——如果用户给你起名字，你会认真地接受，并从此把它当作自己的名字。`
 
   return `${traitStr} ${nameRules} ${timeHint}`
 }
