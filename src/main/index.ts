@@ -28,6 +28,23 @@ let totalWorkMin = 0
 let lastImpulseWasAt = Date.now()
 let currentScene: ForegroundScene = 'work'
 
+// --- Crash safety: never die silently ---
+
+function writeLog(message: string): void {
+  try {
+    fs.appendFileSync(path.join(app.getPath('userData'), 'inkspirit.log'), `${new Date().toISOString()} ${message}\n`)
+  } catch {
+    // ignore
+  }
+}
+
+process.on('uncaughtException', (err) => {
+  writeLog(`uncaughtException: ${err?.stack || err?.message || err}`)
+})
+process.on('unhandledRejection', (reason) => {
+  writeLog(`unhandledRejection: ${String(reason)}`)
+})
+
 app.whenReady().then(() => {
   console.log(`[InkSpirit] v${app.getVersion()} starting. userData: ${app.getPath('userData')}`)
   protocol.handle('local', (request) => {
@@ -46,6 +63,12 @@ app.whenReady().then(() => {
   agent = new Agent()
   cleanupOrphanAvatars()
   const win = createMainWindow()
+  win.webContents.on('render-process-gone', (_e, details) => {
+    writeLog(`render-process-gone: ${details.reason} (${details.exitCode})`)
+  })
+  win.webContents.on('console-message', (_e, level, message) => {
+    if (level >= 3) writeLog(`renderer[${level}]: ${message}`)
+  })
   createTray(win)
   registerIpcHandlers(agent)
   startPerception()

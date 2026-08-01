@@ -38,7 +38,6 @@ uniform float uAmp;
 uniform float uSpeed;
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
-  // Layered sine wave across the image — like a paper sheet breathing
   float wave = sin(uv.y * 9.0 + uTime * uSpeed) * uAmp;
   vec2 shifted = vec2(uv.x + wave, uv.y);
   gl_FragColor = texture2D(uTex, shifted);
@@ -48,7 +47,7 @@ void main() {
 /**
  * WebGL "paper ripple" renderer for static sprites: the image breathes like
  * a living paper doll (Live2D-style feel). GPU-only, negligible cost.
- * Falls back gracefully (returns false) when WebGL is unavailable.
+ * Falls back gracefully (renders nothing) when WebGL is unavailable.
  */
 export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -62,12 +61,11 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
       canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null
     if (!gl) return
 
-    const img = new Image()
-    img.src = url
-    if (img.complete) start()
-    else img.onload = start
-
     let raf = 0
+    let disposed = false
+    let started = false
+    let visible = true
+    let contextLost = false
     let program: WebGLProgram | null = null
     let texture: WebGLTexture | null = null
     let uTime: WebGLUniformLocation | null = null
@@ -75,7 +73,25 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
     let uSpeed: WebGLUniformLocation | null = null
     let uRes: WebGLUniformLocation | null = null
 
+    // Pause rendering when the canvas is hidden (e.g. settings panel open)
+    const observer = new IntersectionObserver((entries) => {
+      visible = entries[0]?.isIntersecting ?? true
+    })
+    observer.observe(canvas)
+
+    // Stop cleanly if the GPU context is lost (driver reset, sleep/wake)
+    const onContextLost = (e: Event) => {
+      e.preventDefault()
+      contextLost = true
+      cancelAnimationFrame(raf)
+    }
+    canvas.addEventListener('webglcontextlost', onContextLost)
+
+    const img = new Image()
+
     function start() {
+      if (started || disposed) return
+      started = true
       const c = canvas!
       const g = gl!
       const w = img.naturalWidth || 1
@@ -88,7 +104,6 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
       c.style.width = `${cw}px`
       c.style.height = `${ch}px`
 
-      // Vertex buffer (full-screen quad)
       const buf = g.createBuffer()
       g.bindBuffer(g.ARRAY_BUFFER, buf)
       g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g.STATIC_DRAW)
@@ -117,6 +132,12 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
 
       const startTime = performance.now()
       const loop = (t: number) => {
+        if (disposed || contextLost) return
+        // Hidden (display:none / off-screen): skip drawing but keep polling cheaply
+        if (!visible) {
+          raf = requestAnimationFrame(loop)
+          return
+        }
         const p = paramsRef.current
         const time = (t - startTime) / 1000
         g.useProgram(program)
@@ -130,8 +151,15 @@ export function SpriteAnimCanvas({ url, size, state }: SpriteAnimCanvasProps) {
       raf = requestAnimationFrame(loop)
     }
 
+    img.src = url
+    if (img.complete) start()
+    else img.onload = () => { if (!disposed) start() }
+
     return () => {
+      disposed = true
       cancelAnimationFrame(raf)
+      observer.disconnect()
+      canvas.removeEventListener('webglcontextlost', onContextLost)
       if (texture) gl.deleteTexture(texture)
       if (program) gl.deleteProgram(program)
     }

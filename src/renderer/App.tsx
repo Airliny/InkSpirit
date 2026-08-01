@@ -7,6 +7,7 @@ import { WizardView } from './views/WizardView'
 import { PetView } from './views/PetView'
 import type { SpriteSource, ModelSource } from './components/avatar/modelTypes'
 import type { AvatarExpression } from './stores/avatarStore'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './App.css'
 
 type Screen = 'wizard' | 'desktop'
@@ -164,7 +165,9 @@ export default function App() {
           <ChatView modelSource={modelSource} state={panelState as any} messages={messages} isStreaming={isStreaming} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onHeaderClick={handleBackToPet} />
         </div>
         <div style={{ display: panel === 'settings' ? 'block' : 'none', height: '100%' }}>
-          <SettingsView modelSource={modelSource} onModelSourceChange={setModelSource} onBack={() => setPanel('chat')} />
+          <ErrorBoundary>
+            <SettingsView modelSource={modelSource} onModelSourceChange={setModelSource} onBack={() => setPanel('chat')} />
+          </ErrorBoundary>
         </div>
       </div>
     </div>
