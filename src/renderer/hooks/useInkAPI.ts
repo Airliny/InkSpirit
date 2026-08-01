@@ -13,22 +13,43 @@ declare global {
       }>
       getConfig: (key: string) => Promise<string | null>
       setConfig: (key: string, value: string) => Promise<boolean>
+
+      // Window
+      setPetMode: () => Promise<void>
+      setPanelMode: () => Promise<void>
+      toggleMode: () => Promise<void>
+      moveWindowBy: (dx: number, dy: number) => Promise<void>
+      moveWindowTo: (x: number, y: number) => Promise<void>
+      getWindowPosition: () => Promise<[number, number]>
+      startWindowDrag: () => Promise<void>
+      updateWindowDrag: () => Promise<void>
+      endWindowDrag: () => Promise<void>
       minimizeWindow: () => void
       toggleAlwaysOnTop: () => Promise<boolean>
+
+      // Model
+      importModel: (spriteKey: string) => Promise<{ success: boolean; path?: string; error?: string }>
+      importModelFromPath: (spriteKey: string, fp: string) => Promise<{ success: boolean; path?: string; error?: string }>
+      importLive2DModel: () => Promise<{ success: boolean; path?: string; error?: string }>
+      getModelSprites: () => Promise<Record<string, string | null>>
+      getModelType: () => Promise<string>
+      getLive2DPath: () => Promise<string | null>
+      hasModel: () => Promise<boolean>
+
+      // Chat events
       onChatChunk: (callback: (chunk: string) => void) => () => void
       onChatDone: (callback: () => void) => () => void
+      onWindowMode: (callback: (mode: 'pet' | 'panel') => void) => () => void
       onNavigate: (callback: (page: string) => void) => () => void
-      onPetExpression: (callback: (data: { expression: string }) => void) => () => void
-      onPetMood: (callback: (data: { mood: string }) => void) => () => void
-      onPetSoul: (callback: (data: { energy: number; attachment: number }) => void) => () => void
       onPetBehavior: (callback: (data: { behavior: string }) => void) => () => void
       onPetSpeak: (callback: (data: { message: string; action: string }) => void) => () => void
       onPetThought: (callback: (data: { thought: string }) => void) => () => void
-      checkForUpdates: (manual?: boolean) => Promise<{ state: string; version?: string; message?: string }>
-      downloadUpdate: () => Promise<boolean>
-      installUpdate: () => Promise<boolean>
-      onUpdateStatus: (callback: (data: { state: string; version?: string; message?: string }) => void) => () => void
-      onUpdateProgress: (callback: (data: { percent: number }) => void) => () => void
+      onPetExpression: (callback: (data: { expression: string }) => void) => () => void
+      onPetMood: (callback: (data: { mood: string }) => void) => () => void
+      onPetSoul: (callback: (data: { energy: number; attachment: number }) => void) => () => void
+      onPetUserReturned: (callback: () => void) => () => void
+
+      // Local models (Ollama)
       getOllamaStatus: () => Promise<{ running: boolean; version?: string; error?: string }>
       listLocalModels: () => Promise<Array<{ name: string; size: number }>>
       searchModelCatalog: () => Promise<{
@@ -44,6 +65,13 @@ declare global {
       removeLocalModel: (model: string) => Promise<{ success: boolean; error?: string }>
       useLocalModel: (model: string) => Promise<{ success: boolean; model: string }>
       onModelPullProgress: (callback: (data: { model: string; percent: number; status: string }) => void) => () => void
+
+      // Update
+      checkForUpdates: (manual?: boolean) => Promise<{ state: string; version?: string; message?: string }>
+      downloadUpdate: () => Promise<boolean>
+      installUpdate: () => Promise<boolean>
+      onUpdateStatus: (callback: (data: { state: string; version?: string; message?: string }) => void) => () => void
+      onUpdateProgress: (callback: (data: { percent: number }) => void) => () => void
     }
   }
 }

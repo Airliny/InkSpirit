@@ -91,7 +91,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
           if (typeof (model as any).motion === 'function') {
             (model as any).motion('idle', 0, 3)
           } else if (model.internalModel) {
-            const motions = Object.keys(model.internalModel.motions ?? {})
+            const motions = Object.keys((model.internalModel as any).motions ?? {})
             if (motions.length > 0) {
               model.motion(motions[0])
             }

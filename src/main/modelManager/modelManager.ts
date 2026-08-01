@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import fetch, { type Response as FetchResponse } from 'node-fetch'
 import { getMainWindow } from '../windowManager'
 import { getHardwareInfo, checkModelFeasible, type HardwareInfo, type ModelRequirement } from './hardware'
 
@@ -42,7 +42,7 @@ const MODEL_CATALOG: CatalogModel[] = [
   { name: 'Qwen2.5', tag: 'qwen2.5:14b', size: '约 9.0GB', parameterSize: '14B', description: '中大型中文对话（需 16GB+ 内存）', minVramGB: 12, minRamGB: 16 }
 ]
 
-async function api(path: string, init?: { method?: string; body?: string }): Promise<Response> {
+async function api(path: string, init?: { method?: string; body?: string }): Promise<FetchResponse> {
   return fetch(OLLAMA_HOST + path, {
     method: init?.method ?? 'GET',
     headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,

@@ -1,6 +1,6 @@
 {
   "name": "inkspirit",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "InkSpirit - AI Desktop Companion",
   "main": "./out/main/index.js",
   "scripts": {
@@ -8,8 +8,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder",
-    "publish:release": "electron-vite build && electron-builder --publish never && node scripts/publish.mjs",    "lint": "eslint src --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit",
+    "publish:release": "electron-vite build && electron-builder --publish never && node scripts/publish.mjs",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

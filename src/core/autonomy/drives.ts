@@ -22,7 +22,7 @@ export const DEFAULT_DRIVES: Drives = {
 export type BehaviorImpulse =
   | { type: 'none' }
   | { type: 'move'; reason: string; intensity: number }
-  | { type: 'rest'; reason: string }
+  | { type: 'rest'; reason: string; intensity: number }
   | { type: 'explore'; reason: string }
   | { type: 'socialize'; reason: string; urgency: number }
   | { type: 'self_soothe'; reason: string }
@@ -121,7 +121,8 @@ export function tick(elapsedSeconds: number, userIdleMs: number = 0): BehaviorIm
     case 'sleepiness':
       impulse = {
         type: 'rest',
-        reason: intensity > 0.8 ? '太困了' : intensity > 0.65 ? '有点累' : '眯一会儿'
+        reason: intensity > 0.8 ? '太困了' : intensity > 0.65 ? '有点累' : '眯一会儿',
+        intensity
       }
       d.sleepiness = Math.max(0, d.sleepiness - intensity * 0.7)
       break
