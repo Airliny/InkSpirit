@@ -44,6 +44,54 @@ html, body, #root {
 }
 
 /* =============================================
+   Sprite pet animations — subtle, alive
+   ============================================= */
+
+@keyframes animFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.015); }
+}
+.anim-float { animation: animFloat 2.8s ease-in-out infinite; }
+
+@keyframes animSway {
+  0%, 100% { transform: rotate(-2.5deg); }
+  50% { transform: rotate(2.5deg); }
+}
+.anim-sway { animation: animSway 0.65s ease-in-out infinite; }
+
+@keyframes animBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.anim-bounce { animation: animBounce 0.5s ease-in-out infinite; }
+
+@keyframes animBreathSlow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+.anim-breath-slow { animation: animBreathSlow 3.2s ease-in-out infinite; }
+
+@keyframes animStretch {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.06, 0.92); }
+}
+.anim-stretch { animation: animStretch 1.1s ease-in-out infinite; }
+
+@keyframes animJump {
+  0% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-10px) scale(1.06); }
+  70% { transform: translateY(0) scale(0.98); }
+  100% { transform: translateY(0) scale(1); }
+}
+.anim-jump { animation: animJump 0.7s ease-out; }
+
+@keyframes animDroop {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(2px) scale(0.99); }
+}
+.anim-droop { animation: animDroop 3s ease-in-out infinite; }
+
+/* =============================================
    Pet Mode
    ============================================= */
 

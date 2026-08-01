@@ -23,7 +23,7 @@ export function createMainWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 180,
     height: 200,
-    x: width - 200,
+    x: width - PET_W,
     y: height - 280,
     title: 'InkSpirit',
     frame: false,
@@ -92,16 +92,16 @@ export function moveWindowBy(dx: number, dy: number): void {
   if (!mainWindow || !isPetMode || isHanging || isInertia) return
   const [x, y] = mainWindow.getPosition()
   const { width, height } = workAreaFor(mainWindow)
-  const newX = Math.max(0, Math.min(width - 200, x + dx))
-  const newY = Math.max(0, Math.min(height - 200, y + dy))
+  const newX = Math.max(0, Math.min(width - PET_W, x + dx))
+  const newY = Math.max(0, Math.min(height - PET_H, y + dy))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
 }
 
 export function moveWindowTo(x: number, y: number): void {
   if (!mainWindow || !isPetMode) return
   const { width, height } = workAreaFor(mainWindow)
-  const newX = Math.max(0, Math.min(width - 200, x))
-  const newY = Math.max(0, Math.min(height - 200, y))
+  const newX = Math.max(0, Math.min(width - PET_W, x))
+  const newY = Math.max(0, Math.min(height - PET_H, y))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
 }
 
@@ -146,8 +146,8 @@ export function updateWindowDrag(): void {
   const dx = cursor.x - dragOrigin.startMouseX
   const dy = cursor.y - dragOrigin.startMouseY
   const { width, height } = workAreaFor(mainWindow)
-  const newX = Math.max(0, Math.min(width - 200, dragOrigin.winX + dx))
-  const newY = Math.max(0, Math.min(height - 200, dragOrigin.winY + dy))
+  const newX = Math.max(0, Math.min(width - PET_W, dragOrigin.winX + dx))
+  const newY = Math.max(0, Math.min(height - PET_H, dragOrigin.winY + dy))
   mainWindow.setPosition(Math.round(newX), Math.round(newY))
 }
 
@@ -192,9 +192,9 @@ function startInertia(vx: number, vy: number): void {
 
     // Bounce off screen edges with energy loss
     if (nx <= 0) { nx = 0; vx = Math.abs(vx) * 0.6 }
-    if (nx >= width - 200) { nx = width - 200; vx = -Math.abs(vx) * 0.6 }
+    if (nx >= width - PET_W) { nx = width - PET_W; vx = -Math.abs(vx) * 0.6 }
     if (ny <= 0) { ny = 0; vy = Math.abs(vy) * 0.6 }
-    if (ny >= height - 200) { ny = height - 200; vy = -Math.abs(vy) * 0.6 }
+    if (ny >= height - PET_H) { ny = height - PET_H; vy = -Math.abs(vy) * 0.6 }
 
     win.setPosition(Math.round(nx), Math.round(ny))
   }, STEP_MS)

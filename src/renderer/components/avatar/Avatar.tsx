@@ -10,9 +10,25 @@ interface AvatarProps {
   onClick?: () => void
 }
 
+// Subtle animations per state so static sprites feel alive
+const STATE_ANIM: Record<string, string> = {
+  idle: 'anim-float',
+  blink: 'anim-float',
+  sit: 'anim-float',
+  walk: 'anim-sway',
+  happy: 'anim-bounce',
+  love: 'anim-bounce',
+  surprised: 'anim-jump',
+  sleep: 'anim-breath-slow',
+  yawn: 'anim-stretch',
+  stretch: 'anim-stretch',
+  sad: 'anim-droop'
+}
+
 export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarProps) {
   const [broken, setBroken] = useState(false)
   const url = resolveSpriteUrl({ type: 'sprites', sprites }, state)
+  const animClass = STATE_ANIM[state] ?? 'anim-float'
 
   // Preload every sprite once so state switches don't flicker
   useEffect(() => {
@@ -45,18 +61,20 @@ export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarP
       }}
     >
       {url && !broken ? (
-        <img
-          src={url}
-          alt="pet"
-          onError={() => setBroken(true)}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            objectFit: 'contain',
-            pointerEvents: 'none'
-          }}
-          draggable={false}
-        />
+        <div className={animClass} style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+          <img
+            src={url}
+            alt="pet"
+            onError={() => setBroken(true)}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+              pointerEvents: 'none'
+            }}
+            draggable={false}
+          />
+        </div>
       ) : (
         <div
           style={{
