@@ -1,10 +1,60 @@
 import { ipcMain, app } from 'electron'
 import { getMainWindow, toggleAlwaysOnTop, setPetMode, setPanelMode, toggleMode, moveWindowBy, moveWindowTo, startWindowDrag, updateWindowDrag, endWindowDrag } from '../windowManager'
 import { showPetContextMenu } from '../trayManager'
+import { logTo, logsDirectory, type LogCategory } from '../logs'
+import { getDatabaseState } from '../../core/database'
+import { getOrCreateSoulManifest } from '../../core/soul/manifest'
+import { getConfig } from '../../core/config'
+import { getSecureConfig } from '../../core/secureStore'
 import fs from 'fs'
 import path from 'path'
 
+const LOG_CATEGORIES: LogCategory[] = ['startup', 'renderer', 'avatar', 'brain', 'updater']
+
 export function registerSystemHandlers(): void {
+  // Renderer-side structured logs (avatar load failures, etc.) — never chat
+  // content, memories or secrets; the renderer only sends category + reason.
+  ipcMain.handle('log:event', (_event, category: string, message: string) => {
+    if (LOG_CATEGORIES.includes(category as LogCategory) && typeof message === 'string') {
+      logTo(category as LogCategory, `renderer: ${message.slice(0, 500)}`)
+    }
+  })
+
+  /** 诊断页：一次拿全系统状态，用户反馈问题时可一键查看 */
+  ipcMain.handle('diagnostics:get', () => {
+    const db = getDatabaseState()
+    let soulId: string | null = null
+    try {
+      soulId = getOrCreateSoulManifest(app.getVersion()).soulId
+    } catch {
+      soulId = null
+    }
+    const provider = getConfig('provider') || 'openai'
+    const model = getConfig(`${provider}_model`) || null
+    const currentBodyId = getConfig('current_avatar_id') || null
+    const modelType = getConfig('model_type') || 'sprites'
+    let gpu = {}
+    try {
+      gpu = app.getGPUFeatureStatus()
+    } catch {
+      gpu = {}
+    }
+    return {
+      version: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      electron: process.versions.electron,
+      uptimeSec: Math.round(process.uptime()),
+      logsDir: logsDirectory(),
+      db: { status: db.status, lastError: db.lastError },
+      soul: { soulId },
+      brain: { provider, model, configured: !!getSecureConfig(`${provider}_api_key`) },
+      body: { currentBodyId, modelType },
+      gpu,
+      updater: { enabled: app.isPackaged }
+    }
+  })
+
   ipcMain.handle('window:minimize', () => {
     getMainWindow()?.minimize()
   })

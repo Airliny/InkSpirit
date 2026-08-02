@@ -34,6 +34,17 @@ const STATE_TO_EXPRESSION: Record<string, string> = {
   sleep: 'relaxed'
 }
 
+/** 加载超时：超时后按失败处理（不会留下挂起的加载） */
+function withTimeout<T>(promise: Promise<T>, ms: number, reason: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(reason)), ms)
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) }
+    )
+  })
+}
+
 export function VRMView({ modelPath, state = 'idle', bodyState, size = 200, held, onLoadError }: VRMViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const bodyRef = useRef(bodyState ?? DEFAULT_BODY_STATE)
@@ -185,7 +196,12 @@ export function VRMView({ modelPath, state = 'idle', bodyState, size = 200, held
 
         const loader = new GLTFLoader()
         loader.register((parser: unknown) => new VRMLoaderPlugin(parser as never))
-        const gltf = await loader.loadAsync(toLocalUrl(modelPath))
+        // 加载超时保护：本地文件/损坏模型不应让身体无限等待（回退链接管）
+        const gltf = await withTimeout(
+          loader.loadAsync(toLocalUrl(modelPath)),
+          15000,
+          '3D 身体加载超时'
+        )
         if (disposed || destroyed) { release(); return }
 
         const loadedVrm = gltf.userData.vrm

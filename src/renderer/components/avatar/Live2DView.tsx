@@ -2,9 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import type { Application as PixiApplication } from 'pixi.js'
 import type { AnimationState } from './modelTypes'
 
-let appInstance: PixiApplication | null = null
-let appRefCount = 0
-
 const MOTION_MAP: Record<string, string> = {
   idle: 'idle', walk: 'walk', sit: 'sit', sleep: 'sleep', stretch: 'stretch',
   yawn: 'yawn', surprised: 'surprised', happy: 'happy', sad: 'sad', love: 'love', blink: 'idle'
@@ -37,14 +34,16 @@ export function toLocalUrl(absPath: string): string {
   return 'local://' + absPath.replace(/\\/g, '/')
 }
 
-async function getSharedApp(canvas: HTMLCanvasElement, width: number, height: number): Promise<PixiApplication> {
-  if (appInstance) {
-    appRefCount++
-    return appInstance
-  }
+/**
+ * One Pixi Application per Live2DView instance, bound to that instance's own
+ * canvas. NO shared singleton: the pet, the chat header and the empty-state
+ * avatar each need their own WebGL canvas — a shared app pins every model to
+ * the first canvas, blanking all other instances (and overlapping models).
+ */
+async function createOwnApp(canvas: HTMLCanvasElement, width: number, height: number): Promise<PixiApplication> {
   // Dynamic import: pixi.js (~1MB) is only loaded when a Live2D model is used
   const { Application } = await import('pixi.js')
-  const app = new Application({
+  return new Application({
     view: canvas,
     width,
     height,
@@ -53,17 +52,6 @@ async function getSharedApp(canvas: HTMLCanvasElement, width: number, height: nu
     resolution: 2,
     autoDensity: true,
   })
-  appInstance = app
-  appRefCount = 1
-  return app
-}
-
-function releaseSharedApp(): void {
-  appRefCount--
-  if (appRefCount <= 0 && appInstance) {
-    appInstance.destroy(true)
-    appInstance = null
-  }
 }
 
 interface Live2DViewProps {
@@ -116,7 +104,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
     if (!canvasRef.current || !modelPath) return
 
     let destroyed = false
-    let acquired = false
+    let app: PixiApplication | null = null
     setError(null)
 
     // H2: unify the WebGL context lifecycle. lost → release our renderer
@@ -125,7 +113,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
     const canvas = canvasRef.current
     const onContextLost = (e: Event) => {
       e.preventDefault()
-      releaseOnce()
+      releaseApp()
     }
     const onContextRestored = () => {
       if (!destroyed) setGen((g) => g + 1)
@@ -133,13 +121,17 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
     canvas.addEventListener('webglcontextlost', onContextLost)
     canvas.addEventListener('webglcontextrestored', onContextRestored)
 
-    // Release the shared Pixi app exactly once per acquisition, so an
-    // unmount racing with a slow model load can't destroy an app that
-    // another Live2DView is still rendering with.
-    function releaseOnce() {
-      if (!acquired) return
-      acquired = false
-      releaseSharedApp()
+    // Destroy this instance's own app exactly once per creation, so an
+    // unmount racing with a slow model load can't leak a Pixi app.
+    function releaseApp() {
+      if (!app) return
+      const a = app
+      app = null
+      try {
+        a.destroy(true)
+      } catch {
+        // dead context — nothing to clean
+      }
     }
 
     async function load() {
@@ -156,12 +148,11 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
         }
 
         const { Live2DModel } = await import('pixi-live2d-display')
-        const app = await getSharedApp(canvas, width, height)
-        acquired = true
+        app = await createOwnApp(canvas, width, height)
 
         // The library loads via XHR — must be a fetchable URL, not a raw path
         const model = await Live2DModel.from(toLocalUrl(modelPath))
-        if (destroyed) { releaseOnce(); return }
+        if (destroyed) { releaseApp(); return }
 
         // Center and scale (getBounds can be unreliable before first render)
         const rawBounds = model.getBounds()
@@ -191,7 +182,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
         app.stage.addChild(model)
         modelRef.current = model
       } catch (e: any) {
-        releaseOnce()
+        releaseApp()
         if (!destroyed) {
           const reason = e?.message ?? '模型加载失败'
           setError(reason)
@@ -205,7 +196,7 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
     return () => {
       destroyed = true
       modelRef.current = null
-      releaseOnce()
+      releaseApp()
       canvas.removeEventListener('webglcontextlost', onContextLost)
       canvas.removeEventListener('webglcontextrestored', onContextRestored)
     }

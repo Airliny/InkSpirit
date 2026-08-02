@@ -1,3 +1,58 @@
+## InkSpirit 0.9.2 Preview
+
+**Stability & Experience Fix.** 不新增核心能力，只修复影响第一次体验的问题。
+
+v0.9.2 Preview focuses on stability and first-run experience. No major features are introduced. This release ensures InkSpirit can reliably deliver its core promise: a persistent AI life that users can meet, interact with, and continue growing with.
+
+### P0 启动稳定性
+
+- **启动检查点日志**：`logs/startup.log` 记录完整启动链（app ready → database → agent → ipc → window → renderer ready），首次安装"任务栏有图标但无窗口"可直接从日志定位卡点
+- **窗口等首帧再显示**：`ready-to-show` 才显示窗口，杜绝空白透明窗口；10 秒兜底计时器保证渲染卡死也不会隐形进程
+- **渲染失败可见**：`did-fail-load` / `render-process-gone` 记录到 `logs/renderer.log`，崩溃自动重载（防循环护栏保留）
+- **IPC 注册提前到窗口创建前**：消除渲染进程竞态
+- 数据库初始化失败 / 迁移失败 → 恢复对话框（已有机制），失败原因写入日志，绝不静默
+
+### P1 桌宠显示修复
+
+- **修复 Live2D 共享 Pixi 单例 bug**：聊天面板同时挂两个身体实例时，第二个实例的模型渲染到第一个 canvas（一个空白、一个重叠）。改为每实例独立 Pixi Application——桌宠、聊天头部、空状态各用各的 canvas
+- 设置窗口无桌宠实例（设计确认）：一个灵魂、一个身体——设置页不创建第二只砚灵，不存在双动画循环/双情绪状态/双 WebGL Context 问题
+
+### P2 身体加载稳定
+
+- 回退链统一：VRM → Live2D → Sprite → 内置「砚」，任何失败都不空白
+- **VRM 加载超时保护**（15 秒超时按失败回退）
+- 身体加载失败原因写入 `logs/avatar.log`（绝不记录模型内容）
+- VRM 导入复制失败 → 明确中文错误 + 日志
+
+### P3 日志系统
+
+```
+%APPDATA%/InkSpirit/logs/
+  startup.log    启动检查点
+  renderer.log   渲染进程崩溃 / JS 错误
+  avatar.log     身体加载失败
+  brain.log      大脑初始化 / 聊天失败（不含聊天内容与密钥）
+  updater.log    更新服务事件
+```
+
+原则：只记录崩溃/失败/关键事件；聊天内容、记忆、API Key 永不落盘日志。
+
+### P4 诊断页
+
+设置 → 系统 → 诊断：一次查看应用版本 / 灵魂系统 / 数据库 / 大脑连接 / 身体引擎 / GPU 渲染 / 更新服务，一键复制日志目录，方便用户反馈问题。
+
+### P5 回归测试
+
+- **First Launch Test**：全新安装无资产 → 身体列表恒含内置「砚」、当前身体解析必为内置（`firstLaunch.test.ts`）
+- **Avatar Failure Test**：精灵图缺图状态回退（happy/sad/love → idle → 内置），完全无图 → 内置，绝不空白（`modelTypes.test.ts`）
+- 单元测试 261+ 个，新增 8 个
+
+### 发布验证标准
+
+新用户：✅ 安装成功 → ✅ 第一次打开有界面 → ✅ 第一次看到砚灵 → ✅ 能聊天 → ✅ 能关闭再次打开
+老用户：✅ 升级后灵魂存在 → ✅ 身体存在 → ✅ 设置存在 → ✅ API 配置存在
+出问题：✅ 有日志 → ✅ 有诊断 → ✅ 能恢复
+
 ## InkSpirit 0.9.1 Preview
 
 First public preview of the digital life framework. 核心完成，等待生态反馈——不是 beta。

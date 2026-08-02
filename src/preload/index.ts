@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
   chat: (message: string) => ipcRenderer.invoke('agent:chat', message),
+  // Structured diagnostics logging (category + reason only — never content)
+  logEvent: (category: 'startup' | 'renderer' | 'avatar' | 'brain' | 'updater', message: string) =>
+    ipcRenderer.invoke('log:event', category, message),
+  getDiagnostics: () => ipcRenderer.invoke('diagnostics:get'),
   configureProvider: (provider: string, apiKey?: string, model?: string, baseUrl?: string) =>
     ipcRenderer.invoke('agent:configureProvider', provider, apiKey, model, baseUrl),
   getAgentState: () => ipcRenderer.invoke('agent:getState'),

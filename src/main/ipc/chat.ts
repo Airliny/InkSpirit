@@ -10,6 +10,7 @@ import { countMemories } from '../../core/soul/memory'
 import { hasLifeEvent, recordLifeEvent } from '../../core/soul/lifeTimeline'
 import { buildBrainProfile } from '../../core/brain/brainProfile'
 import { getConfig } from '../../core/config'
+import { logTo } from '../logs'
 
 export function registerChatHandlers(agent: Agent): void {
   ipcMain.handle('agent:chat', async (_event, message: string) => {
@@ -140,6 +141,7 @@ export function registerChatHandlers(agent: Agent): void {
       return { success: true, route: usedRoute }
     } catch (error) {
       const raw = error instanceof Error ? error.message : 'Unknown error'
+      logTo('brain', `chat failed: ${raw}`)
       const friendly = /401|403|api[_ ]?key|unauthorized|invalid.*key/i.test(raw)
         ? '大脑的钥匙好像不对…请到设置里检查一下 API Key'
         : /ECONNREFUSED|fetch failed|network|timeout|socket/i.test(raw)

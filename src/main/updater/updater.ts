@@ -6,6 +6,7 @@ import { buildBackup } from '../../core/backup'
 import { getActivePersonality } from '../../core/soul/personality'
 import { parseManifest, validateManifest, compareVersions, type UpdateManifest } from '../../core/updaterManifest'
 import { LATEST_SCHEMA_VERSION } from '../../core/migrations'
+import { logTo } from '../logs'
 import path from 'path'
 import fs from 'fs'
 
@@ -41,6 +42,7 @@ async function fetchManifest(): Promise<UpdateManifest | null> {
     }
     return manifest
   } catch {
+    logTo('updater', 'manifest fetch failed (network / no manifest asset)')
     return null
   }
 }
@@ -67,7 +69,7 @@ export function backupSoulBeforeUpdate(): string | null {
     }
     return file
   } catch (err) {
-    console.error(`[updater] soul backup failed: ${err instanceof Error ? err.message : err}`)
+    logTo('updater', `soul backup failed: ${err instanceof Error ? err.message : err}`)
     return null
   }
 }
@@ -87,10 +89,12 @@ export function initUpdater(): void {
   })
 
   autoUpdater.on('update-available', (info) => {
+    logTo('updater', `update available: ${info.version}`)
     send('update:status', { state: 'available', version: info.version, notes: lastManifest?.notes ?? null })
   })
 
   autoUpdater.on('update-not-available', () => {
+    logTo('updater', 'update not available')
     send('update:status', { state: 'not-available' })
   })
 
@@ -103,10 +107,12 @@ export function initUpdater(): void {
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    logTo('updater', `update downloaded: ${info.version}`)
     send('update:status', { state: 'downloaded', version: info.version })
   })
 
   autoUpdater.on('error', (err) => {
+    logTo('updater', `update error: ${err.message}`)
     send('update:status', { state: 'error', message: err.message })
   })
 }

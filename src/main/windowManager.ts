@@ -11,6 +11,7 @@ import {
   type WorkArea
 } from '../core/windowState'
 import { getConfig, setConfig } from '../core/config'
+import { writeStartupLog } from './startupLog'
 
 let mainWindow: BrowserWindow | null = null
 let isPetMode = true
@@ -66,12 +67,39 @@ export function createMainWindow(): BrowserWindow {
     resizable: false,
     skipTaskbar: false,
     hasShadow: false,
+    // Never show a blank transparent window: wait for the first renderer
+    // paint, then reveal. If ready-to-show never fires, the startup log
+    // shows exactly where the chain died (05 created → missing 06 ready).
+    show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       nodeIntegration: false,
       contextIsolation: true
     }
+  })
+
+  mainWindow.once('ready-to-show', () => {
+    writeStartupLog('06 renderer ready-to-show — showing window')
+    const win = mainWindow
+    if (win && !win.isDestroyed()) win.show()
+  })
+  // Fallback: if the renderer never paints (hung/crashed before first paint),
+  // reveal the window anyway so the user is never left with an invisible
+  // process. The startup log's missing "06" line pinpoints the failure.
+  setTimeout(() => {
+    writeStartupLog('06 ready-to-show fallback timer fired')
+    const win = mainWindow
+    if (win && !win.isDestroyed() && !win.isVisible()) {
+      writeStartupLog('06 WARNING: showing window without ready-to-show — renderer never painted')
+      win.show()
+    }
+  }, 10000)
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    writeStartupLog(`08 did-fail-load code=${code} desc=${desc} url=${url}`)
+  })
+  mainWindow.webContents.on('did-finish-load', () => {
+    writeStartupLog('07 did-finish-load')
   })
 
   mainWindow.setVisibleOnAllWorkspaces(true)

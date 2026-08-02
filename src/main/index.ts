@@ -30,6 +30,8 @@ import { pathToFileURL } from 'url'
 import { migrateToSecure } from '../core/secureStore'
 import { preloadConfig, getConfig, setConfig } from '../core/config'
 import { uuidv4 } from '../core/utils'
+import { writeStartupLog } from './startupLog'
+import { logTo } from './logs'
 import fs from 'fs'
 import path from 'path'
 
@@ -51,21 +53,12 @@ let lastRecallMemory: import('../core/soul/memory').Memory | null = null
 
 // --- Crash safety: never die silently ---
 
-function writeLog(message: string): void {
-  try {
-    fs.appendFileSync(path.join(app.getPath('userData'), 'inkspirit.log'), `${new Date().toISOString()} ${message}\n`)
-  } catch {
-    // ignore
-  }
-}
-
 process.on('uncaughtException', (err) => {
-  writeLog(`uncaughtException: ${err?.stack || err?.message || err}`)
+  writeStartupLog(`uncaughtException: ${err?.stack || err?.message || err}`)
 })
 process.on('unhandledRejection', (reason) => {
-  writeLog(`unhandledRejection: ${String(reason)}`)
+  writeStartupLog(`unhandledRejection: ${String(reason)}`)
 })
-
 // 单实例锁：双击/重复启动 → 聚焦已有窗口，绝不出现两个砚灵
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -85,7 +78,7 @@ if (!app.requestSingleInstanceLock()) {
  * "宁可降级，也不能退出" — at minimum the user sees a window with an action.
  */
 async function handleStartupDbFailure(state: DatabaseState): Promise<void> {
-  writeLog(`startup DB failure: ${state.lastError}`)
+  writeStartupLog(`startup DB failure: ${state.lastError}`)
   const { response } = await dialog.showMessageBox({
     type: 'error',
     title: '砚灵无法启动',
@@ -104,7 +97,7 @@ async function handleStartupDbFailure(state: DatabaseState): Promise<void> {
       return
     }
     // Recovered DB still failing — surface the error once more, then quit
-    writeLog(`recovery failed: ${recovered.lastError}`)
+    writeStartupLog(`recovery failed: ${recovered.lastError}`)
     await dialog.showMessageBox({
       type: 'error',
       title: '修复失败',
@@ -142,11 +135,13 @@ app.whenReady().then(() => {
 
   // Startup protection: DB failure enters Recovery Mode — never a silent,
   // invisible hanging process
+  writeStartupLog('01 app ready')
   const dbState = openDatabase()
   if (dbState.status !== 'healthy') {
     handleStartupDbFailure(dbState)
     return
   }
+  writeStartupLog('02 database ok')
   preloadConfig()
   // Migrate legacy plaintext API keys to encrypted storage
   for (const p of ['openai', 'anthropic', 'deepseek']) {
@@ -157,7 +152,8 @@ app.whenReady().then(() => {
   } catch (err) {
     // Brain config corrupted (e.g. broken personalities JSON) — recover
     // rather than fail the whole app: clear soul-affecting rows and restart
-    writeLog(`Agent init failed: ${err instanceof Error ? err.message : err}`)
+    logTo('brain', `Agent init failed: ${err instanceof Error ? err.message : err}`)
+    writeStartupLog(`Agent init failed: ${err instanceof Error ? err.message : err}`)
     try {
       const db = getDatabase()
       db.prepare('DELETE FROM personalities').run()
@@ -175,10 +171,15 @@ app.whenReady().then(() => {
     handleStartupDbFailure(recovered)
     return
   }
+  writeStartupLog('03 agent ok')
   cleanupOrphanAvatars()
+  // IPC first — the renderer must never win a race against its own API
+  registerIpcHandlers(agent)
+  writeStartupLog('04 ipc handlers registered')
   const win = createMainWindow()
+  writeStartupLog('05 window created')
   win.webContents.on('render-process-gone', (_e, details) => {
-    writeLog(`render-process-gone: ${details.reason} (${details.exitCode})`)
+    logTo('renderer', `render-process-gone: ${details.reason} (${details.exitCode})`)
     // 渲染进程崩溃 → 白屏是桌宠最坏的失败方式：自动重载恢复（防无限循环）
     if (details.reason !== 'clean-exit') {
       const now = Date.now()
@@ -186,20 +187,19 @@ app.whenReady().then(() => {
       rendererReloadCount++
       lastRendererReloadAt = now
       if (rendererReloadCount <= 3 && !win.isDestroyed()) {
-        writeLog(`reloading renderer (attempt ${rendererReloadCount})`)
+        logTo('renderer', `reloading renderer (attempt ${rendererReloadCount})`)
         setTimeout(() => {
           if (!win.isDestroyed()) win.webContents.reload()
         }, 800)
       } else {
-        writeLog(`renderer crash loop — giving up auto-reload`)
+        logTo('renderer', 'renderer crash loop — giving up auto-reload')
       }
     }
   })
   win.webContents.on('console-message', (_e, level, message) => {
-    if (level >= 3) writeLog(`renderer[${level}]: ${message}`)
+    if (level >= 3) logTo('renderer', `renderer[${level}]: ${message}`)
   })
   createTray(win)
-  registerIpcHandlers(agent)
   startPerception()
   startSceneWatcher()
   startWorldSensor()

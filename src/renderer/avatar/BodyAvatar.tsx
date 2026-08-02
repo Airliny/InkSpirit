@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import type { AnimationState, AvatarDescriptor, BodyState } from '../../core/avatar/types'
 import { DEFAULT_BODY_STATE } from '../../core/avatar/types'
 import { getAvatarAdapter } from './registry'
@@ -52,6 +52,12 @@ export function BodyAvatar({ body, state = 'idle', bodyState = DEFAULT_BODY_STAT
 
   const adapter = getAvatarAdapter(renderedBody.type)
 
+  // 身体加载失败 → 回退内置「砚」，并写入 avatar.log（失败原因，绝不含模型内容）
+  const handleLoadError = useCallback((reason: string) => {
+    setBroken(true)
+    window.inkAPI.logEvent('avatar', `${renderedBody.id} load failed: ${reason}`).catch(() => {})
+  }, [renderedBody.id])
+
   const content = (!adapter || broken)
     ? renderBuiltin(renderedBody.source, size, onClick)
     : adapter.render({
@@ -61,7 +67,7 @@ export function BodyAvatar({ body, state = 'idle', bodyState = DEFAULT_BODY_STAT
         size,
         held,
         onClick,
-        onLoadError: () => setBroken(true)
+        onLoadError: handleLoadError
       })
 
   return (

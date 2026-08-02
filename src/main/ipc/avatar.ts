@@ -14,6 +14,7 @@ import type { InteractionKind } from '../../core/avatar/touchQuality'
 import { hasLifeEvent, recordLifeEvent } from '../../core/soul/lifeTimeline'
 import type { SpriteSource } from '../../core/avatar/types'
 import { getMainWindow } from '../windowManager'
+import { logTo } from '../logs'
 
 const SPRITE_KEYS = ['idle', 'walk', 'sleep', 'sit', 'stretch', 'yawn', 'surprised', 'happy', 'sad', 'love']
 
@@ -87,7 +88,12 @@ export function registerAvatarHandlers(): void {
     }
 
     const destPath = path.join(avatarsDir, `vrm_${Date.now()}.vrm`)
-    fs.copyFileSync(srcPath, destPath)
+    try {
+      fs.copyFileSync(srcPath, destPath)
+    } catch (err) {
+      logTo('avatar', `VRM import copy failed: ${err instanceof Error ? err.message : err}`)
+      return { success: false, error: '模型文件复制失败，请检查权限' }
+    }
     setConfig('vrm_path', destPath)
     setConfig('model_type', 'vrm')
     return { success: true, path: destPath }

@@ -98,6 +98,11 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
   const [lifeTab, setLifeTab] = useState<'all' | 'today'>('all')
   const [soulManifest, setSoulManifest] = useState<{ soulId: string; birthday: string; birthVersion: string; continuityOk: boolean } | null>(null)
   const [moodState, setMoodState] = useState<{ label: string } | null>(null)
+  const [diag, setDiag] = useState<any>(null)
+
+  useEffect(() => {
+    window.inkAPI.getDiagnostics().then(setDiag).catch(() => {})
+  }, [])
 
   useEffect(() => {
     window.inkAPI.getBrainProfile().then((p) => {
@@ -1208,6 +1213,56 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                   <div style={{ fontSize: 13, color: 'var(--ink-primary)' }}>检查更新失败：{updateMessage}</div>
                 )}
               </div>
+            </div>
+
+            <div className="settings-section">
+              <h4>诊断</h4>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 10 }}>
+                遇到问题时查看此页，并复制下方日志目录反馈——砚灵能自己告诉发生了什么。
+              </div>
+              {diag ? (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {(() => {
+                      const gpuInfo = diag.gpu as Record<string, string>
+                      const gpuOk = gpuInfo['webgl'] !== 'disabled'
+                      const items = [
+                        { label: '应用版本', ok: true, detail: `InkSpirit v${diag.version}（${diag.platform} ${diag.arch} · Electron ${diag.electron}）` },
+                        { label: '灵魂系统', ok: !!diag.soul?.soulId, detail: diag.soul?.soulId ? `灵魂编号 ${diag.soul.soulId}` : '尚未生成' },
+                        { label: '数据库', ok: diag.db?.status === 'healthy', detail: diag.db?.status === 'healthy' ? '健康' : `异常：${diag.db?.lastError ?? '未知'}` },
+                        { label: '大脑连接', ok: diag.brain?.provider === 'ollama' || !!diag.brain?.configured, detail: diag.brain?.provider === 'ollama' ? '本地大脑（Ollama）' : `${diag.brain?.provider} ${diag.brain?.model ?? '未配置模型'}${diag.brain?.configured ? ' · 已配置' : ' · 未配置'}` },
+                        { label: '身体引擎', ok: true, detail: `当前身体 ${diag.body?.currentBodyId ?? '内置'}（${diag.body?.modelType}）` },
+                        { label: 'GPU 渲染', ok: gpuOk, detail: gpuOk ? `WebGL ${gpuInfo['webgl']} · 合成 ${gpuInfo['gpu_compositing']}` : `WebGL 不可用（${gpuInfo['webgl']}）——将使用静态回退` },
+                        { label: '更新服务', ok: diag.updater?.enabled, detail: diag.updater?.enabled ? '已启用（正式版自动检查）' : '开发模式不检查' }
+                      ]
+                      return items.map((it) => (
+                        <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                          <span style={{ color: it.ok ? 'var(--green)' : 'var(--ink-primary)', fontWeight: 700, width: 16 }}>{it.ok ? '✓' : '✗'}</span>
+                          <span style={{ width: 64, color: 'var(--text-tertiary)' }}>{it.label}</span>
+                          <span>{it.detail}</span>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                  <div className="info-note" style={{ marginTop: 10, wordBreak: 'break-all' }}>
+                    日志目录：{diag.logsDir}
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <button
+                      className="settings-sprite-btn"
+                      style={{ fontSize: 12 }}
+                      onClick={async () => {
+                        await window.inkAPI.setConfig('last_diag_copy', diag.logsDir)
+                        try { await navigator.clipboard.writeText(`InkSpirit v${diag.version} | 日志目录：${diag.logsDir}`) } catch { /* clipboard unavailable */ }
+                      }}
+                    >
+                      复制日志目录
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>正在读取系统状态…</div>
+              )}
             </div>
 
             <div className="about-footer">

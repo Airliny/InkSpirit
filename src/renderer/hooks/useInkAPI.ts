@@ -5,6 +5,16 @@ declare global {
   interface Window {
     inkAPI: {
       chat: (message: string) => Promise<{ success: boolean; error?: string; budgetBlocked?: boolean; cached?: boolean; route?: string }>
+      logEvent: (category: 'startup' | 'renderer' | 'avatar' | 'brain' | 'updater', message: string) => Promise<unknown>
+      getDiagnostics: () => Promise<{
+        version: string; platform: string; arch: string; electron: string; uptimeSec: number; logsDir: string
+        db: { status: string; lastError: string | null }
+        soul: { soulId: string | null }
+        brain: { provider: string; model: string | null; configured: boolean }
+        body: { currentBodyId: string | null; modelType: string }
+        gpu: Record<string, string>
+        updater: { enabled: boolean }
+      }>
       configureProvider: (provider: string, apiKey?: string, model?: string, baseUrl?: string) => Promise<{ success: boolean; error?: string }>
       getAgentState: () => Promise<{
         emotion: Record<string, unknown>
