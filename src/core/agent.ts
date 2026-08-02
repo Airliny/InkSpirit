@@ -12,10 +12,12 @@ import {
 } from './soul/emotion'
 import { getRelationship, recordRelationshipEvent, acknowledgeMemoryFeedback, recordInteraction } from './soul/relationship'
 import { classifyInteraction, classifyRecallFeedback, recallEvent } from './soul/relationshipEvents'
-import { addMemory } from './soul/memory'
+import { addMemory, weakenWrongRecalledMemory } from './soul/memory'
 import { assignName } from './soul/identity'
 import { needsIdentityAnalysis, analyzeIdentityIntent } from './soul/identityIntent'
 import { decideMode, type PersonalityMode } from './soul/mode'
+import { getCurrentMood, moodLine } from './soul/mood'
+import { recordLifeEvent } from './soul/lifeTimeline'
 import { getDatabase } from './database'
 import { getConfig, setConfig } from './config'
 import { setSecureConfig, getSecureConfig } from './secureStore'
@@ -88,7 +90,7 @@ export class Agent {
       baseUrl: resolvedBaseUrl || undefined,
       model: effectiveModel,
       maxTokens: 1024,
-      temperature: 0.8
+      temperature: readSavedTemperature(provider)
     }
 
     // Save to config (API key encrypted). Save even when empty so the user
@@ -179,9 +181,25 @@ export class Agent {
       baseUrl: getConfig('ollama_base_url') || PROVIDER_DEFAULTS.ollama.baseUrl,
       model,
       maxTokens: 1024,
-      temperature: 0.8
+      temperature: readSavedTemperature('ollama')
     })
     setConfig('local_model', model)
+  }
+
+  /**
+   * 高级设置：调整某个大脑的温度（0-2）。立即作用于当前大脑，
+   * 换大脑/重启后保留。普通用户界面不暴露。
+   */
+  setTemperature(provider: AIProvider, temperature: number): number {
+    const t = Math.max(0, Math.min(2, temperature))
+    setConfig(`temperature_${provider}`, String(t))
+    // 立即生效：用已保存的配置重建当前客户端
+    if (provider === this.currentProvider) {
+      try {
+        this.configureProvider(provider)
+      } catch { /* 配置不完整时保持原客户端，下次切换生效 */ }
+    }
+    return t
   }
 
   hasLocalModel(): boolean {
@@ -363,6 +381,8 @@ export class Agent {
           source: 'identity',
           metadata: { name: intent.name, reason: '用户主动建立身份称呼' }
         })
+        // Life Timeline：被赋予名字（来源永远是 user）
+        recordLifeEvent('named', '被赋予了名字', `以后就叫我「${intent.name}」`, 'named_first', 'major')
         return { kind: 'naming', name: intent.name }
       }
     }
@@ -407,10 +427,14 @@ export class Agent {
     }
 
     // Recall feedback: if the pet just mentioned a memory, this reply tells
-    // whether it was right. Confirmed → relationship reward; wrong → no
-    // reward (the correction event above already handles the dip).
+    // whether it was right. Confirmed → relationship reward; wrong → the
+    // false memory itself is weakened (never recalled again) + no reward.
     if (this.awaitingRecallConfirmation) {
       const outcome = classifyRecallFeedback(userMessage)
+      if (outcome === 'wrong') {
+        // 记忆纠正：被否定的记忆真正削弱（importance 减半 + corrected 标记）
+        weakenWrongRecalledMemory()
+      }
       const ev = outcome ? recallEvent(null, outcome) : null
       if (ev) recordRelationshipEvent(ev)
       this.awaitingRecallConfirmation = false
@@ -461,7 +485,8 @@ export class Agent {
       relationshipStage: relationship.stage,
       currentTime: new Date().toISOString(),
       mode,
-      situation: situationLine ?? undefined
+      situation: situationLine ?? undefined,
+      mood: moodLine(getCurrentMood()) ?? undefined
     })
 
     return { kind: 'ok', systemMsg: buildSystemPrompt(ctx), mode }
@@ -597,6 +622,12 @@ function createProvider(config: AIProviderConfig): IAIClient {
     default:
       return new OpenAIProvider(config)
   }
+}
+
+/** 读取某大脑的已保存温度（高级设置），缺失时用默认 0.8 */
+function readSavedTemperature(provider: AIProvider): number {
+  const raw = Number(getConfig(`temperature_${provider}`))
+  return Number.isFinite(raw) && raw >= 0 && raw <= 2 ? raw : 0.8
 }
 
 /** 超时包装：避免网络挂起让测试/请求永远不返回 */

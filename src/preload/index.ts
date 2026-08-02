@@ -6,6 +6,9 @@ const api = {
     ipcRenderer.invoke('agent:configureProvider', provider, apiKey, model, baseUrl),
   getAgentState: () => ipcRenderer.invoke('agent:getState'),
   getModelInfo: () => ipcRenderer.invoke('agent:getModelInfo'),
+  getBrainProfile: () => ipcRenderer.invoke('brain:getProfile'),
+  setBrainTemperature: (provider: string, temperature: number) =>
+    ipcRenderer.invoke('brain:setTemperature', provider, temperature),
   getConfig: (key: string) => ipcRenderer.invoke('config:get', key),
   setConfig: (key: string, value: string) => ipcRenderer.invoke('config:set', key, value),
   getSecureConfig: (key: string) => ipcRenderer.invoke('config:getSecure', key),
@@ -34,10 +37,31 @@ const api = {
   importModelFromPath: (spriteKey: string, fp: string) =>
     ipcRenderer.invoke('model:importFromPath', spriteKey, fp),
   importLive2DModel: () => ipcRenderer.invoke('model:importLive2D'),
+  importVrm: () => ipcRenderer.invoke('avatar:importVrm'),
   getModelSprites: () => ipcRenderer.invoke('model:getSprites'),
   getModelType: () => ipcRenderer.invoke('model:getType'),
   getLive2DPath: () => ipcRenderer.invoke('model:getLive2DPath'),
   hasModel: () => ipcRenderer.invoke('model:hasModel'),
+
+  // Avatar Engine — 身体（UI 不知道格式，只知道这是一个身体）
+  listBodies: () => ipcRenderer.invoke('avatar:listBodies'),
+  getCurrentBodyId: () => ipcRenderer.invoke('avatar:getCurrent'),
+  setCurrentBody: (id: string) => ipcRenderer.invoke('avatar:setCurrent', id),
+  getBodyPrefs: () => ipcRenderer.invoke('avatar:getPrefs'),
+  setBodyPrefs: (prefs: { lookFollow: boolean; sway: boolean; touchFeel: boolean }) =>
+    ipcRenderer.invoke('avatar:setPrefs', prefs),
+  getTouchQuality: () => ipcRenderer.invoke('avatar:getTouchQuality'),
+  addInteraction: (kind: 'touch' | 'comfort' | 'respond' | 'spam') => ipcRenderer.invoke('avatar:addInteraction', kind),
+  onPetWorld: (cb: (data: { fatigue: number; hourContext: string; sleepLate: boolean; busyDeviation: number; quietDeviation: number; streakMin: number; userPresent: boolean }) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, d: { fatigue: number; hourContext: string; sleepLate: boolean; busyDeviation: number; quietDeviation: number; streakMin: number; userPresent: boolean }) => cb(d)
+    ipcRenderer.on('pet:world', h)
+    return () => ipcRenderer.removeListener('pet:world', h)
+  },
+  onAvatarCursor: (cb: (data: { x: number; y: number; near: boolean }) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, d: { x: number; y: number; near: boolean }) => cb(d)
+    ipcRenderer.on('avatar:cursor', h)
+    return () => ipcRenderer.removeListener('avatar:cursor', h)
+  },
   exportData: () => ipcRenderer.invoke('data:export'),
   importData: () => ipcRenderer.invoke('data:import'),
 
@@ -74,6 +98,17 @@ const api = {
     const h = (_e: Electron.IpcRendererEvent, d: { model: string; percent: number; status: string }) => cb(d)
     ipcRenderer.on('model:pullProgress', h)
     return () => ipcRenderer.removeListener('model:pullProgress', h)
+  },
+
+  // Life Timeline — 成长经历（砚灵日志）
+  getLifeEvents: (limit?: number) => ipcRenderer.invoke('life:getEvents', limit),
+  getTodayLifeEvents: () => ipcRenderer.invoke('life:getToday'),
+  getSoulManifest: () => ipcRenderer.invoke('life:getSoulManifest'),
+  getMoodState: () => ipcRenderer.invoke('life:getMoodState'),
+  onPetMoodState: (cb: (data: { valence: number; arousal: number; label: string }) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, d: { valence: number; arousal: number; label: string }) => cb(d)
+    ipcRenderer.on('pet:moodState', h)
+    return () => ipcRenderer.removeListener('pet:moodState', h)
   },
 
   // Update

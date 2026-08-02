@@ -37,7 +37,8 @@ export const BACKUP_TABLES = [
   'memories',
   'identity_events',
   'behavior_logs',
-  'daily_patterns'
+  'daily_patterns',
+  'life_events'
 ] as const
 
 export type BackupTable = (typeof BACKUP_TABLES)[number]
@@ -50,6 +51,12 @@ export interface BackupManifest {
   soulVersion: number
   createdAt: number
   checksum: string
+  /** Soul Manifest —— 哲学身份：换电脑/换身体后，"还是同一个砚灵"的证明 */
+  soulId?: string
+  soulCreatedAt?: number
+  soulBirthVersion?: string
+  /** 连续性指纹：身份/人格/关系/记忆的确定性摘要 */
+  continuityHash?: string
 }
 
 export interface BackupFile {
@@ -84,7 +91,7 @@ export function checksumOf(tables: Record<string, unknown>): string {
  * Build a complete life-state snapshot from a database.
  * Reads everything inside one transaction → consistent snapshot.
  */
-export function buildBackup(db: Database.Database, opts: BackupOptions): BackupFile {
+export function buildBackup(db: Database.Database, opts: BackupOptions & { soulId?: string; soulCreatedAt?: number; soulBirthVersion?: string; continuityHash?: string }): BackupFile {
   const tables: Record<string, Record<string, unknown>[]> = {}
   db.transaction(() => {
     for (const table of BACKUP_TABLES) {
@@ -104,7 +111,11 @@ export function buildBackup(db: Database.Database, opts: BackupOptions): BackupF
       schemaVersion: LATEST_SCHEMA_VERSION,
       soulVersion: opts.soulVersion,
       createdAt: opts.createdAt ?? Date.now(),
-      checksum: checksumOf(tables)
+      checksum: checksumOf(tables),
+      soulId: opts.soulId,
+      soulCreatedAt: opts.soulCreatedAt,
+      soulBirthVersion: opts.soulBirthVersion,
+      continuityHash: opts.continuityHash
     },
     tables
   }

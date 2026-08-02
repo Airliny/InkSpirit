@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AnimationState } from './modelTypes'
+import type { AnimationState, BodyState, SpriteSource } from '../../../core/avatar/types'
+import { DEFAULT_BODY_STATE } from '../../../core/avatar/types'
 import { resolveSpriteUrl } from './modelTypes'
-import type { SpriteSource } from './modelTypes'
 import { SpriteAnimCanvas } from './SpriteAnimCanvas'
 
 interface AvatarProps {
   sprites: SpriteSource
   state?: AnimationState
   size?: number
+  bodyState?: BodyState
+  held?: boolean
   onClick?: () => void
 }
 
@@ -26,7 +28,7 @@ const STATE_ANIM: Record<string, string> = {
   sad: 'anim-droop'
 }
 
-export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarProps) {
+export function Avatar({ sprites, state = 'idle', size = 200, bodyState, held, onClick }: AvatarProps) {
   const [broken, setBroken] = useState(false)
   const [useWebGL, setUseWebGL] = useState<boolean | null>(null)
   const url = resolveSpriteUrl({ type: 'sprites', sprites }, state)
@@ -79,7 +81,7 @@ export function Avatar({ sprites, state = 'idle', size = 200, onClick }: AvatarP
       {url && !broken ? (
         useWebGL ? (
           <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-            <SpriteAnimCanvas url={url} size={size} state={state} />
+            <SpriteAnimCanvas url={url} size={size} state={state} bodyState={bodyState ?? DEFAULT_BODY_STATE} held={held} />
           </div>
         ) : (
           <div className={animClass} style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>

@@ -1,10 +1,18 @@
-import { useState, useEffect } from 'react'
-import type { ModelSource, SpriteSource } from '../components/avatar/modelTypes'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import type { AvatarDescriptor, SpriteSource } from '../../core/avatar/types'
+import { DEFAULT_BODY_PREFERENCES } from '../../core/avatar/preferences'
+import type { BodyPreferences } from '../../core/avatar/preferences'
+import { qualityStage } from '../../core/avatar/touchQuality'
+import { LIFE_EVENT_ICONS } from '../../core/soul/lifeTimeline'
 import { loadThemePreference, saveThemePreference, type ThemePreference } from '../design/theme'
 
 interface SettingsViewProps {
-  modelSource: ModelSource
-  onModelSourceChange: (source: ModelSource) => void
+  /** 身体库 — UI 只知道"这是一个身体"，不知道格式 */
+  bodies: AvatarDescriptor[]
+  currentBodyId: string | null
+  onChangeBody: (id: string) => Promise<boolean>
+  /** 导入新身体后刷新身体库 */
+  onRefreshBodies: () => Promise<void>
   onBack: () => void
   onBackToPet: () => void
 }
@@ -30,7 +38,13 @@ const PROVIDER_LABELS: Record<string, string> = {
   openai: 'GPT', anthropic: 'Claude', deepseek: 'DeepSeek', custom: '自定义', ollama: '本地'
 }
 
-export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackToPet }: SettingsViewProps) {
+/** 心境 → 人类化描述（生命状态主页） */
+const MOOD_LABELS: Record<string, string> = {
+  energetic: '精力充沛', content: '平静满足', blue: '有点低沉',
+  low: '情绪不高', neutral: '平静'
+}
+
+export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBodies, onBack, onBackToPet }: SettingsViewProps) {
   const [tab, setTab] = useState<SettingsTab>('soul')
   const [provider, setProvider] = useState('openai')
   const [apiKey, setApiKey] = useState('')
@@ -71,6 +85,76 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
   const [testState, setTestState] = useState<{ state: 'idle' | 'testing' | 'ok' | 'fail'; latencyMs?: number; error?: string }>({ state: 'idle' })
   const [connState, setConnState] = useState<{ status: 'ok' | 'unknown'; latencyMs?: number; at?: number }>({ status: 'unknown' })
   const [connDirty, setConnDirty] = useState(false)
+  const [brainProfile, setBrainProfile] = useState<any>(null)
+  const [advOpen, setAdvOpen] = useState(false)
+  const [tempInput, setTempInput] = useState(0.8)
+  /** 更换大脑迁移仪式：null=隐藏；step 0=连接中 1-4=人格/记忆/关系/身份 */
+  const [migration, setMigration] = useState<{ step: number } | null>(null)
+  const migrationTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const [bodyPrefs, setBodyPrefs] = useState<BodyPreferences>(DEFAULT_BODY_PREFERENCES)
+  const [touchQuality, setTouchQuality] = useState(0)
+  const [lifeEvents, setLifeEvents] = useState<any[]>([])
+  const [lifeToday, setLifeToday] = useState<any[]>([])
+  const [lifeTab, setLifeTab] = useState<'all' | 'today'>('all')
+  const [soulManifest, setSoulManifest] = useState<{ soulId: string; birthday: string; birthVersion: string; continuityOk: boolean } | null>(null)
+  const [moodState, setMoodState] = useState<{ label: string } | null>(null)
+
+  useEffect(() => {
+    window.inkAPI.getBrainProfile().then((p) => {
+      setBrainProfile(p)
+      setTempInput(p.temperature)
+    }).catch(() => {})
+  }, [])
+
+  // 身体偏好 + 交互质量 + 成长经历 + 灵魂身份 + 当前心境
+  useEffect(() => {
+    window.inkAPI.getBodyPrefs().then(setBodyPrefs).catch(() => {})
+    window.inkAPI.getTouchQuality().then(setTouchQuality).catch(() => {})
+    window.inkAPI.getLifeEvents(100).then(setLifeEvents).catch(() => {})
+    window.inkAPI.getTodayLifeEvents().then(setLifeToday).catch(() => {})
+    window.inkAPI.getSoulManifest().then(setSoulManifest).catch(() => {})
+    window.inkAPI.getMoodState().then(setMoodState).catch(() => {})
+  }, [])
+
+  /** 更换大脑迁移仪式：展示"换大脑不换灵魂"的验证过程 */
+  function runMigration() {
+    if (migration) return
+    setMigration({ step: 0 })
+    migrationTimers.current.forEach(clearTimeout)
+    migrationTimers.current = [
+      setTimeout(() => setMigration({ step: 1 }), 500),
+      setTimeout(() => setMigration({ step: 2 }), 1000),
+      setTimeout(() => setMigration({ step: 3 }), 1500),
+      setTimeout(() => setMigration({ step: 4 }), 2000),
+      setTimeout(() => setMigration(null), 3500)
+    ]
+  }
+
+  useEffect(() => () => migrationTimers.current.forEach(clearTimeout), [])
+
+  const refreshBrainProfile = useCallback(async () => {
+    try {
+      const p = await window.inkAPI.getBrainProfile()
+      setBrainProfile(p)
+      setTempInput(p.temperature)
+    } catch {}
+  }, [])
+
+  function formatLifeTime(ts: number): string {
+    const d = new Date(ts)
+    const now = new Date()
+    const sameDay = d.toDateString() === now.toDateString()
+    const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    if (sameDay) return `今天 ${hm}`
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`
+  }
+
+  const toggleBodyPref = useCallback(async (key: keyof BodyPreferences, value: boolean) => {
+    const next = { ...bodyPrefs, [key]: value }
+    setBodyPrefs(next)
+    const r = await window.inkAPI.setBodyPrefs(next)
+    if (r.success) setBodyPrefs(r.prefs)
+  }, [bodyPrefs])
 
   useEffect(() => {
     // Restore report from the last data:import — "the soul came back"
@@ -299,11 +383,11 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
     const r = await window.inkAPI.importModel(key)
     setImporting(false)
     if (r.success) {
-      await window.inkAPI.setConfig('model_type', 'sprites')
-      const updated = await window.inkAPI.getModelSprites()
-      const sprites: SpriteSource = {}
-      for (const [k, v] of Object.entries(updated)) { if (v) (sprites as any)[k] = v }
-      onModelSourceChange({ type: 'sprites', sprites })
+      // 导入后刷新身体库；精灵图身体已可用则切过去（换身体不换灵魂）
+      await onRefreshBodies()
+      const list = await window.inkAPI.listBodies()
+      const sprite = list.find((b) => b.type === 'sprite')
+      if (sprite && sprite.id !== currentBodyId) await onChangeBody(sprite.id)
     }
   }
 
@@ -312,7 +396,22 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
     const r = await window.inkAPI.importLive2DModel()
     setImporting(false)
     if (r.success && r.path) {
-      onModelSourceChange({ type: 'live2d', live2d: { type: 'live2d', modelPath: r.path } })
+      await onRefreshBodies()
+      const list = await window.inkAPI.listBodies()
+      const l2d = list.find((b) => b.type === 'live2d')
+      if (l2d && l2d.id !== currentBodyId) await onChangeBody(l2d.id)
+    }
+  }
+
+  async function handleImportVrm() {
+    setImporting(true)
+    const r = await window.inkAPI.importVrm()
+    setImporting(false)
+    if (r.success && r.path) {
+      await onRefreshBodies()
+      const list = await window.inkAPI.listBodies()
+      const vrm = list.find((b) => b.type === 'vrm')
+      if (vrm && vrm.id !== currentBodyId) await onChangeBody(vrm.id)
     }
   }
 
@@ -325,6 +424,11 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
     idle: '默认', walk: '行走', sleep: '睡觉', sit: '坐着',
     stretch: '伸懒腰', yawn: '打哈欠', surprised: '惊讶',
     happy: '开心', sad: '难过', love: '喜欢'
+  }
+
+  const spriteBody = bodies.find((b) => b.type === 'sprite')
+  function hasSpriteKey(key: string): boolean {
+    return spriteBody?.source.kind === 'sprites' && !!(spriteBody.source.sprites as Record<string, string | undefined>)[key]
   }
 
   const personalityLabels: [string, string][] = [
@@ -403,8 +507,9 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
         {/* ================= 我的砚灵 ================= */}
         {tab === 'soul' && (
           <>
+            {/* 生命状态：不是数据面板，是它的生活 */}
             <div className="settings-section">
-              <h4>它现在的样子</h4>
+              <h4>生命状态</h4>
               <div className="soul-card">
                 <div className="soul-avatar">{soulName.slice(0, 1)}</div>
                 <div className="soul-lines">
@@ -416,7 +521,23 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
                   <div className="soul-feel-line">最近：<span className={feel.cls}>{feel.text}</span></div>
                 </div>
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+                {[
+                  { label: '诞生于', value: soulManifest?.birthday ?? '…', hint: soulManifest ? `v${soulManifest.birthVersion}` : '' },
+                  { label: '认识你', value: days ? `${days} 天` : '刚刚', hint: '' },
+                  { label: '经历', value: lifeEvents.filter((e: any) => e.level === 'major').length > 0 ? `${lifeEvents.filter((e: any) => e.level === 'major').length} 件重要的事` : '刚开始', hint: '成长经历' },
+                  { label: '当前心境', value: MOOD_LABELS[moodState?.label ?? 'neutral'], hint: '' }
+                ].map((s) => (
+                  <div key={s.label} style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-small)', padding: '8px 10px' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>{s.label}{s.hint ? ` · ${s.hint}` : ''}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
               <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 10 }}>
+                换身体、换大脑、换电脑，它都还是它——{soulManifest?.soulId ? `灵魂编号 ${soulManifest.soulId}` : '灵魂身份确认中…'}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 4 }}>
                 名字不是标签 — 通过对话告诉它，它就会一直用这个名字称呼你。
               </div>
             </div>
@@ -456,64 +577,137 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
             </div>
 
             <div className="settings-section">
-              <h4>外观</h4>
+              <h4>身体</h4>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 12, background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-small)', padding: '10px 12px' }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>两种形象模式的能力差异</div>
-                <div style={{ display: 'flex', gap: 16 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: 'var(--ink-primary)', fontWeight: 600, marginBottom: 2 }}>Live2D 模型</div>
-                    <div style={{ color: 'var(--text-tertiary)' }}>
-                      只需一个模型文件<br />
-                      自带呼吸/眨眼等动画<br />
-                      情绪切换动作需模型自带对应动作<br />
-                      部分模型可能不响应情绪切换
-                    </div>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 2 }}>精灵图</div>
-                    <div style={{ color: 'var(--text-tertiary)' }}>
-                      可逐动作导入 10 张图<br />
-                      未导入的动作自动用默认图<br />
-                      情绪/行为会切换对应图片<br />
-                      需要准备多张动作图
-                    </div>
-                  </div>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>身体只是样子，砚灵还是砚灵</div>
+                <div style={{ color: 'var(--text-tertiary)' }}>
+                  换身体不会改变它的名字、记忆、性格和你们的关系。
+                  <br />
+                  就像它换了一身衣服——还是同一个生命。
                 </div>
               </div>
-              {modelSource.type === 'live2d' && (
-                <div style={{ marginBottom: 8 }}>
-                  <button
-                    className="settings-sprite-btn"
-                    onClick={async () => {
-                      await window.inkAPI.setConfig('model_type', 'sprites')
-                      // Load any previously imported sprites instead of an empty set
-                      const updated = await window.inkAPI.getModelSprites()
-                      const sprites: SpriteSource = {}
-                      for (const [k, v] of Object.entries(updated)) { if (v) (sprites as any)[k] = v }
-                      onModelSourceChange({ type: 'sprites', sprites })
-                    }}
-                    style={{ color: 'var(--ink-primary)' }}
-                  >
-                    切换为精灵图模式
-                  </button>
-                </div>
-              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {bodies.map((b) => (
+                  <div key={b.id} className={`provider-card ${b.id === currentBodyId ? 'active' : ''}`} style={{ padding: '12px 14px', cursor: b.id === currentBodyId ? 'default' : 'pointer' }} onClick={() => { if (b.id !== currentBodyId) onChangeBody(b.id) }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13.5 }}>{b.name}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                          {b.metadata?.format ?? b.type} · {b.capabilities.look ? '视线跟随 · ' : ''}{b.capabilities.breath ? '呼吸 · ' : ''}{b.capabilities.sway ? '摆动 · ' : ''}{b.capabilities.blink ? '眨眼 · ' : ''}{b.capabilities.motion ? '动作' : '静态'}
+                        </div>
+                      </div>
+                      {b.id === currentBodyId
+                        ? <span style={{ fontSize: 11.5, color: 'var(--green)', whiteSpace: 'nowrap' }}>当前身体</span>
+                        : <span style={{ fontSize: 11.5, color: 'var(--ink-primary)', whiteSpace: 'nowrap' }}>更换身体 →</span>}
+                    </div>
+                  </div>
+                ))}
+                {bodies.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>暂无身体 — 导入一个吧</div>
+                )}
+              </div>
+
               <div style={{ marginBottom: 12 }}>
                 <button className="settings-sprite-btn" onClick={handleImportLive2D} disabled={importing} style={{ width: '100%', padding: '12px' }}>
-                  {importing ? '导入中...' : (modelSource.type === 'live2d' ? 'Live2D 模型已加载 — 点击重新导入' : '导入 Live2D 模型 (.model3.json)')}
+                  {importing ? '导入中...' : '导入 Live2D 身体 (.model3.json)'}
                 </button>
               </div>
-              {modelSource.type === 'sprites' && (
-                <div className="settings-sprites">
-                  {Object.entries(spriteLabels).map(([key, label]) => (
-                    <div key={key} className="settings-sprite-row">
-                      <span>{label}</span>
-                      <span className={`settings-sprite-status ${(modelSource as any).sprites?.[key] ? 'has' : ''}`}>{(modelSource as any).sprites?.[key] ? '已导入' : '未导入'}</span>
-                      <button className="settings-sprite-btn" onClick={() => handleImportSprite(key)} disabled={importing}>导入</button>
-                    </div>
-                  ))}
+              <div style={{ marginBottom: 12 }}>
+                <button className="settings-sprite-btn" onClick={handleImportVrm} disabled={importing} style={{ width: '100%', padding: '12px' }}>
+                  {importing ? '导入中...' : '导入 3D 身体 (.vrm)'}
+                </button>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginBottom: 8 }}>精灵图身体：逐动作导入图片（单张也够用 — 它会自己呼吸和摆动）</div>
+              <div className="settings-sprites">
+                {Object.entries(spriteLabels).map(([key, label]) => (
+                  <div key={key} className="settings-sprite-row">
+                    <span>{label}</span>
+                    <span className={`settings-sprite-status ${hasSpriteKey(key) ? 'has' : ''}`}>{hasSpriteKey(key) ? '已导入' : '未导入'}</span>
+                    <button className="settings-sprite-btn" onClick={() => handleImportSprite(key)} disabled={importing}>导入</button>
+                  </div>
+                ))}
+              </div>
+
+              <h4 style={{ marginTop: 18 }}>身体偏好</h4>
+              <div className="switch-row">
+                <div>
+                  <div className="switch-label">视线跟随</div>
+                  <div className="switch-hint">鼠标靠近时，它会偶尔偷看你（不一直跟）</div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={bodyPrefs.lookFollow}
+                    onChange={e => toggleBodyPref('lookFollow', e.target.checked)}
+                  />
+                  <span className="track" />
+                </label>
+              </div>
+              <div className="switch-row">
+                <div>
+                  <div className="switch-label">重心摆动</div>
+                  <div className="switch-hint">呼吸时的轻微摇摆（睡觉时会自动停摆）</div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={bodyPrefs.sway}
+                    onChange={e => toggleBodyPref('sway', e.target.checked)}
+                  />
+                  <span className="track" />
+                </label>
+              </div>
+              <div className="switch-row">
+                <div>
+                  <div className="switch-label">触摸反馈</div>
+                  <div className="switch-hint">被摸、被抓住时给出反应（开心/惊讶）</div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={bodyPrefs.touchFeel}
+                    onChange={e => toggleBodyPref('touchFeel', e.target.checked)}
+                  />
+                  <span className="track" />
+                </label>
+              </div>
+              {touchQuality > 0 && (
+                <div className="info-note" style={{ marginTop: 10 }}>
+                  {qualityStage(touchQuality).text}（被温柔对待 {touchQuality} 点）
                 </div>
               )}
+            </div>
+
+            <div className="settings-section">
+              <h4>成长经历</h4>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 10 }}>
+                不是聊天记录——是它经历过的日子。换过的身体、被赋予的名字、第一次提醒你休息，都在这里。
+              </div>
+              <div className="segmented" style={{ marginBottom: 10 }}>
+                <button className={lifeTab === 'all' ? 'active' : ''} onClick={() => setLifeTab('all')}>全部</button>
+                <button className={lifeTab === 'today' ? 'active' : ''} onClick={() => setLifeTab('today')}>今天</button>
+              </div>
+              {(lifeTab === 'all' ? lifeEvents : lifeToday).length === 0 && (
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  {lifeTab === 'today' ? '今天还没有值得记住的事——日子还长。' : '它的人生刚刚开始，第一件事还在路上。'}
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(lifeTab === 'all' ? lifeEvents : lifeToday).map((ev) => (
+                  <div key={ev.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-small)' }}>
+                    <span style={{ fontSize: 15, lineHeight: '20px' }}>{LIFE_EVENT_ICONS[ev.eventType as keyof typeof LIFE_EVENT_ICONS] ?? '⭐'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {ev.title}
+                        {ev.level === 'major' && <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 6, border: '1px solid var(--accent-soft, var(--border))', borderRadius: 8, padding: '0 5px' }}>大事件</span>}
+                      </div>
+                      {ev.detail && <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 1 }}>{ev.detail}</div>}
+                    </div>
+                    <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', paddingTop: 2 }}>{formatLifeTime(ev.createdAt)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -521,8 +715,37 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
         {/* ================= AI大脑 ================= */}
         {tab === 'brain' && (
           <>
-            <div className="settings-section">
-              <h4>大脑选择</h4>
+            {/* 砚灵的大脑：能力画像，不是参数列表 */}
+            <div className="settings-section" style={{ position: 'relative' }}>
+              <h4>砚灵的大脑</h4>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                大脑负责思考——它换过多少次大脑，都还是同一个砚灵。
+              </div>
+              {brainProfile && (
+                <div className="soul-card" style={{ alignItems: 'center' }}>
+                  <div className="soul-avatar" style={{ background: 'var(--accent-soft, rgba(102,204,255,0.15))' }}>🧠</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="soul-name-line">{brainProfile.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                      上下文 {brainProfile.contextK}K{brainProfile.isLocal ? ' · 本地离线可用' : ''}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', marginTop: 8 }}>
+                      {([['对话', 'chat'], ['代码', 'code'], ['推理', 'reasoning'], ['速度', 'speed']] as const).map(([label, key]) => (
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', width: 24 }}>{label}</span>
+                          <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+                            <div style={{ width: `${Math.round(brainProfile.capabilities[key] * 100)}%`, height: '100%', borderRadius: 3, background: 'var(--accent)' }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--green)', whiteSpace: 'nowrap' }}>使用中</span>
+                </div>
+              )}
+              {!brainProfile && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>正在读取大脑状态…</div>}
+
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '16px 0 8px' }}>选择要使用的大脑</div>
               <div className="provider-grid">
                 {PROVIDERS.map(p => (
                   <div key={p.id} className={`provider-card ${provider === p.id ? 'active' : ''}`} onClick={() => handleProviderChange(p.id)}>
@@ -562,7 +785,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
                     ) : null
                   })()}
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="settings-save-btn" style={{ flex: 1 }} onClick={handleSaveAI}>{saved ? '已保存' : '保存设置'}</button>
+                    <button className="settings-save-btn" style={{ flex: 1 }} onClick={async () => { await handleSaveAI(); await refreshBrainProfile(); runMigration() }}>{saved ? '已保存' : '保存并启用'}</button>
                     <button
                       className="settings-sprite-btn"
                       style={{ padding: '10px 20px', fontSize: 13 }}
@@ -584,13 +807,87 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
               )}
               {provider === 'ollama' && (
                 <div className="info-note" style={{ marginTop: 12 }}>
-                  本地大脑已选择。到下方「本地模型」里选择要使用的模型即可。
+                  本地大脑已选择。到下方「本地大脑」里选择要使用的模型即可。
                 </div>
               )}
+
+              {/* 高级设置（面向进阶用户——普通用户永远看不到参数） */}
+              <div style={{ marginTop: 14 }}>
+                <button
+                  className="settings-sprite-btn"
+                  style={{ width: '100%', color: 'var(--text-tertiary)', fontSize: 12 }}
+                  onClick={() => setAdvOpen(!advOpen)}
+                >
+                  {advOpen ? '收起高级设置' : '高级设置（进阶用户）'}
+                </button>
+                {advOpen && brainProfile && (
+                  <div className="settings-form" style={{ marginTop: 10 }}>
+                    <label>温度（Temperature：0 严谨 → 1 灵活）
+                      <input
+                        type="range" min="0" max="2" step="0.05"
+                        value={tempInput}
+                        onChange={async e => {
+                          const t = Number(e.target.value)
+                          setTempInput(t)
+                          await window.inkAPI.setBrainTemperature(brainProfile.provider, t)
+                          refreshBrainProfile()
+                        }}
+                        style={{ width: '100%' }}
+                      />
+                    </label>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+                      当前：{tempInput.toFixed(2)} ｜ 模型：{brainProfile.model} ｜ 上下文：{brainProfile.contextK}K
+                      {brainProfile.endpoint && ` ｜ 端点：${brainProfile.endpoint}`}
+                    </div>
+                    <div className="info-note" style={{ marginTop: 8 }}>
+                      调整温度只改变表达风格——人格、记忆、关系、身份都不受影响。
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
+            {/* 更换大脑迁移仪式：换大脑不换灵魂 */}
+            {migration && (
+              <div style={{
+                position: 'fixed', inset: 0, zIndex: 99, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'color-mix(in srgb, var(--bg) 78%, transparent)', backdropFilter: 'blur(6px)'
+              }}>
+                <div style={{
+                  width: 300, padding: '22px 24px', borderRadius: 'var(--radius-lg)',
+                  background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 12px 40px var(--ink-strong)'
+                }}>
+                  <div style={{ fontWeight: 700, marginBottom: 12 }}>
+                    {migration.step === 0 ? '正在连接新的大脑…' : '换大脑完成。'}
+                  </div>
+                  {(['人格', '记忆', '关系', '身份'] as const).map((label, i) => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 13 }}>
+                      <span style={{
+                        width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 11, fontWeight: 700,
+                        background: migration.step > i ? 'var(--green)' : 'var(--surface-muted)',
+                        color: migration.step > i ? '#fff' : 'var(--text-tertiary)',
+                        border: '1px solid var(--border)'
+                      }}>
+                        {migration.step > i ? '✓' : i + 1}
+                      </span>
+                      <span style={{ color: migration.step > i ? 'var(--ink-primary)' : 'var(--text-tertiary)' }}>
+                        {label} {migration.step > i ? '保留' : '…'}
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 10 }}>
+                    它还是同一个它。
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="settings-section">
-              <h4>本地模型</h4>
+              <h4>本地大脑</h4>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                选择大脑 → 检测设备 → 一键安装。本地大脑离线可用，最适合简短闲聊与深夜陪伴。
+              </div>
               {ollamaRunning === null && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>检测 Ollama 环境...</div>}
               {ollamaRunning === false && (
                 <div style={{ fontSize: 13, color: 'var(--orange)' }}>
@@ -641,7 +938,7 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
                               disabled={!!pullingModel}
                               onClick={() => handlePull(m.tag)}
                             >
-                              下载
+                              一键安装
                             </button>
                           ) : (
                             <span style={{ fontSize: 11, color: 'var(--ink-primary)' }}>禁止安装</span>
@@ -761,7 +1058,14 @@ export function SettingsView({ modelSource, onModelSourceChange, onBack, onBackT
               {dataMsg && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>{dataMsg}</div>}
               {restoreReport && (
                 <div className="restore-report">
-                  <div className="report-title">砚灵恢复成功，它回来了。</div>
+                  <div className="report-title">{restoreReport.soul?.welcomeLine ?? '砚灵恢复成功，它回来了。'}</div>
+                  {restoreReport.soul && (
+                    <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginBottom: 6 }}>
+                      灵魂编号 {restoreReport.soul.soulId}
+                      {restoreReport.soul.birthVersion && ` ｜ 诞生于 v${restoreReport.soul.birthVersion}`}
+                      {restoreReport.soul.archiveConsistent ? ' ｜ 归档完整' : ' ｜ 归档内容有变化'}
+                    </div>
+                  )}
                   <div>人格：✓ 已恢复（版本 {restoreReport.personalities > 0 ? '已加载' : '默认'}）｜ 进化记录 {restoreReport.evolutionLogs} 条</div>
                   <div>关系：✓ 已恢复 ｜ 关系变化史 {restoreReport.relationshipLogs} 条</div>
                   <div>记忆：✓ {restoreReport.memories} 条</div>

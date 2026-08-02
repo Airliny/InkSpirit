@@ -1,5 +1,20 @@
 # 砚灵 InkSpirit
 
+> **License: Apache-2.0 · Privacy: Local-first · Architecture: Soul · Brain · Body**
+
+> **开源数字生命框架，让 AI 拥有持续身份、记忆、成长与身体。**
+>
+> InkSpirit 是一个开源数字生命框架，用于构建能够长期陪伴、成长和进化的 AI 生命体。
+> 它将 AI 伴侣拆分为 **Soul（灵魂）· Brain（大脑）· Body（身体）** 三个独立系统：
+>
+> - **Soul** 负责身份、记忆、人格、关系与成长经历，让它不会因为更换模型或外观而失去连续性。
+> - **Brain** 支持 GPT、Claude、DeepSeek、本地模型及自定义 API，让用户可以自由选择 AI 能力。
+> - **Body** 支持 Sprite、Live2D、VRM 等多种形态，让数字生命拥有真实的存在感。
+>
+> InkSpirit 不只是一个聊天机器人或桌宠，而是一个探索"数字生命持续存在"的开源实验。
+> 你的 AI 可以更换身体、更换大脑、跨设备迁移，但仍保持同一个身份、记忆与成长轨迹。
+> **本地优先，隐私优先，由用户掌控自己的数字生命。**
+
 兼具专业生产力与情感陪伴的自适应 2D 桌宠 Agent。支持 Shimeji 物理交互、双模态人格、屏幕感知及本地/云端 AI 智能路由，轻量低耗。
 
 它不只是聊天机器人，也不只是动画桌宠——它会长期住在你的电脑里，记得你、理解你、主动关心你，随时间成长为独一无二的存在。
@@ -8,12 +23,14 @@
 
 | 组成 | 说明 |
 |---|---|
-| 身体 Avatar | Live2D（Cubism 2.1/4.0 核心内置）/ 精灵图（PNG/GIF）双模式，可拖拽、可点击、带惯性物理；失败自动降级，绝不隐形 |
-| 大脑 Brain | OpenAI / Anthropic (Claude) / DeepSeek / Ollama（本地）四 Provider，流式对话 |
+| 身体 Avatar | Avatar Engine：统一身体描述符 + 适配器注册表（内置/精灵图/Live2D/3D·VRM 已接入，**格式已冻结**见 AVATAR_SDK.md）；身体按能力声明（视线/眨眼/呼吸/摆动/动作/表情/tail/hand/face/skeleton），Capability Action 系统让行为导演只派身体做得到的动作；Body Expression Layer（长期关系+人格→连续气质）+ Mood 心境 + World → Body（疲劳/晚睡/作息偏差让身体慢下来）；精灵图活体化（呼吸+摆动+偶尔偷看+情绪驱动参数+拖拽惯性）；触摸交互（Touch Context：深夜安静回应/下午活跃回应）+ Interaction Quality（安慰/回应高质量、刷屏扣分、过载会"有点晕"，**只影响熟悉感不碰灵魂关系**）；Presence Budget（主动注视/散步每日稀缺）；身体偏好持久化；换身体仪式感；**换身体不换灵魂**；失败自动落到内置「砚」，绝不隐形 |
+| 大脑 Brain | OpenAI / Anthropic (Claude) / DeepSeek / Ollama（本地）/ 自定义 API 五 Provider，流式对话；Brain Center：能力画像（对话/代码/推理/速度）、更换大脑迁移仪式（人格/记忆/关系/身份 ✓ 保留）、高级设置（温度/上下文/端点）、本地大脑一键安装 + 硬件检测 |
 | 世界模型 World | 本地启发式推断用户状态（深度专注/疲劳/熬夜/恢复）、个人作息节奏基线（"今天比平时晚睡"），对话自动注入世界感知；零 AI 成本、零内容留存 |
 | 人格 Personality | 8 维人格参数，缓慢成长且**每次成长留痕**（为什么变成这样可回放）；行为风格由人格派生 |
-| 情绪 Emotion | 20 种情绪（恩怨/原谅/嫉妒/害怕/失望/孤独），情绪基准随长期状态漂移，深夜自然安静 |
+| 情绪 Emotion | 20 种情绪（恩怨/原谅/嫉妒/害怕/失望/孤独），情绪基准随长期状态漂移，深夜自然安静；**Mood 心境层**（小时~天，24h 快照重载加权合成：今天整体开心→content、低落→blue），Emotion→Mood→Temperament 三层 |
 | 记忆 Memory | 分层记忆（短期→长期），定期巩固与衰减；AI 语义化提取；砚灵会"忽然想起"——且回忆被确认会变得更懂你 |
+| 成长经历 Life | Life Timeline：不是聊天记录——第一次换身体/被赋予名字/第一次提醒休息/关系升级/灵魂恢复，构成它的"过去"；事件分级（大事件永久保留）；设置页可回看（全部/今天），随灵魂备份导出 |
+| 灵魂身份 Identity | Soul Manifest：soul_id 首次启动生成永不改变 + 连续性指纹（身份/人格/关系/记忆摘要）——换电脑导入 Archive 后「欢迎回来」，而不是"加载数据库成功"；设置页身份卡 |
 | 关系 Relationship | 六维关系向量（信任/熟悉/喜爱/亲密/依赖/理解），由互动事件分类驱动；关系变化全部可回放 |
 | 行为 Behavior | 行为导演统一决策（Gate→情境→灵魂→关系→选择），反打扰预算让砚灵知道什么时候闭嘴；每个动作带可解释原因 |
 | 陪伴 Guardian | 系统级健康信号（连续工作/熬夜）→ 导演意图表达，不绕过预算，不绕过勿扰 |
@@ -64,6 +81,8 @@ src/
 │   ├── world/                   # 世界模型：scene / situation / patterns / sensor
 │   ├── soul/
 │   │   ├── emotion.ts           # 20 情绪 + 内存态 + 节流落盘
+│   │   ├── mood.ts              # 心境层（小时~天：24h 快照重载加权合成）
+│   │   ├── lifeTimeline.ts      # 成长经历（第一次换身体/命名/提醒休息…）
 │   │   ├── personality.ts       # 人格参数、成长与进化日志（事件溯源）
 │   │   ├── memory.ts            # 分层记忆、巩固、衰减、回忆反馈
 │   │   ├── relationship.ts      # 关系向量持久化 + 变更日志
@@ -75,6 +94,22 @@ src/
 │   │   ├── behaviorBudget.ts    # 反打扰预算
 │   │   ├── bodyLoop.ts          # 身体循环动画边界
 │   │   └── drives.ts            # 驱动动力学
+│   ├── avatar/                  # Avatar Engine 纯逻辑（可单测）
+│   │   ├── types.ts             # 身体描述符 / 能力声明 / BodyState
+│   │   ├── bodies.ts            # 描述符工厂 + 换身体边界（只写身体指向键）
+│   │   ├── bodyState.ts         # 情绪/活动 → 身体参数（呼吸/摆动/视线频率）
+│   │   ├── lookTarget.ts        # 视线跟随（偶尔偷看，不一直跟）
+│   │   ├── actions.ts           # BodyAction Registry（情绪→候选→能力过滤→动作）
+│   │   ├── preferences.ts       # 身体偏好（唯一持久化的身体数据）
+│   │   ├── expressionLayer.ts   # 连续表达层（气质/世界调制/触摸语境）
+│   │   ├── touchQuality.ts      # 交互质量（只影响熟悉感，不碰灵魂）
+│   │   ├── presenceBudget.ts    # 存在感预算（注视/散步每日稀缺）
+│   │   └── sdk.ts               # Avatar SDK 校验（格式/能力词汇表冻结）
+│   ├── avatar/                  # Avatar Engine 纯逻辑（可单测）
+│   │   ├── types.ts             # 身体描述符 / 能力 / BodyState
+│   │   ├── bodies.ts            # 描述符工厂 + 换身体边界（只写身体指向键）
+│   │   ├── bodyState.ts         # 情绪/活动 → 身体参数（呼吸/摆动/视线频率）
+│   │   └── lookTarget.ts        # 视线跟随（偶尔偷看，不一直跟）
 │   ├── brain/
 │   │   ├── ai/                  # AI Provider 工厂：openai / anthropic / types
 │   │   ├── prompt.ts            # 人格+情绪+关系+记忆+世界感知 → 系统提示词
@@ -88,15 +123,20 @@ src/
 │   ├── modelManager/            # Ollama 模型管理 + 硬件检测/门槛
 │   ├── perception/              # 活动检测 / 场景识别 / 时长统计
 │   ├── updater/                 # 更新管理器（manifest + 灵魂备份 + electron-updater）
-│   └── ipc/                     # chat / config / data / system / model / cost / update
+│   └── ipc/                     # chat / config / data / system / model / cost / update / avatar
 ├── preload/                 # contextBridge：window.inkAPI
 └── renderer/                # React 前端
     ├── App.tsx                  # 欢迎向导 / 桌宠模式 / 面板模式（聊天+设置）+ 对话身体状态
     ├── views/                   # PetView（可拖拽桌宠）/ ChatView / SettingsView / WizardView
+    ├── avatar/                  # Avatar Engine（渲染层）
+    │   ├── engine.ts            # Adapter 接口（一种身体格式 = 一个适配器）
+    │   ├── registry.ts          # registerAvatarAdapter / supportsCapability
+    │   ├── BodyAvatar.tsx       # 统一身体渲染入口（UI 不知道格式）
+    │   └── adapters/            # sprite / live2d / builtin 适配器（新增格式注册即用）
     ├── components/
     │   ├── avatar/              # Avatar（精灵图）/ Live2DView / SpriteAnimCanvas（context 恢复）
     │   └── chat/                # ChatBubble / ChatInput
-    ├── stores/                  # zustand：chatStore / avatarStore
+    ├── stores/                  # zustand：chatStore / avatarStore（身体库 + 当前身体）
     └── hooks/                   # useInkAPI
 ```
 
@@ -117,9 +157,25 @@ src/
 - **更新保护**：更新前自动备份灵魂（保留最近 3 份）；更新清单含数据库版本校验，禁止降级损坏数据
 - 本地存储有上限约束（情绪快照 7 天、对话保留 10 条、行为日志 500 条、形象文件自动清理）
 - 窗口标题仅用于本地场景分类，永不落盘；作息节奏只存聚合分钟数
+- **本地优先，隐私优先**：不上传任何用户数据、日志或统计——所有数据都在你的电脑上
+
+## 开源与数据归属
+
+- **License: Apache-2.0**（`LICENSE` / `NOTICE`）——允许商业使用、闭源衍生、私有部署，要求保留版权声明
+- **代码归社区，灵魂归用户，模型归作者，平台归生态**——完整声明见 [docs/OPEN_SOURCE.md](docs/OPEN_SOURCE.md)
+- 用户创建的 Soul 数据（记忆/人格/关系/成长经历）归用户所有；导入的模型版权归原作者
+- 架构规范：[docs/AVATAR_SDK.md](docs/AVATAR_SDK.md)（身体契约）· [docs/SOUL_ARCHIVE.md](docs/SOUL_ARCHIVE.md)（灵魂档案）· [docs/VISION.md](docs/VISION.md)（愿景）· [docs/RELEASE_AUDIT.md](docs/RELEASE_AUDIT.md)（稳定性审计）
 
 ## 更新记录
 
+- **v0.9.1-preview** — 稳定性预览版（v1.0 前 RC）：单实例锁、渲染进程崩溃自动重载、记忆纠正（"记错了"的记忆被真正削弱）、修复向导"让你"笔误与命名原则违规；完整审计清单见 docs/RELEASE_AUDIT.md
+- **v1.0.0** — Identity Release（数字生命完整体验）：定位升级（开源数字生命框架 · Soul/Brain/Body 解耦）、首次启动重构（你好我是砚灵→身体可选→大脑以后再定，先建立关系）、生命状态主页（诞生/认识天数/大事件/当前心境）
+- **v0.9.0** — Brain Center（砚灵的大脑）：能力画像（对话/代码/推理/速度条）、更换大脑迁移仪式（换大脑不换灵魂可视化）、高级设置（温度按大脑持久化）、本地大脑安装器（选择→检测→一键安装）
+- **v0.8.0** — Identity & Soul Archive（灵魂的哲学身份）：Soul Manifest（soul_id 永不改变 + 诞生时间/版本 + 连续性指纹）、Soul Archive 完整归档（导出=灵魂档案，导入=「欢迎回来」+ 连续性校验）、生命周期事件分级（major 永久/normal 有限/noise 不写）、Presence Budget 语境调制（用户不在时安静下来）、docs/SOUL_ARCHIVE.md（Sync Layer 预留，本地优先）
+- **v0.7.0** — Life System（砚灵拥有过去）：Mood 心境层（Emotion→Mood→Temperament 三层）、Life Timeline 成长经历（第一次换身体/命名/提醒休息/关系升级/灵魂恢复 + 设置页回看）、Presence Budget（注视/散步每日稀缺，用完安静下来）、Avatar SDK 冻结（sprite/live2d/vrm 三种格式，docs/AVATAR_SDK.md）、Body Memory 边界锁定（只影响熟悉感，不碰灵魂关系）
+- **v0.6.0** — Body & World Fusion（身体真的在那里生活）：Body Expression Layer（长期关系/人格→连续气质）、World → Body（疲劳/晚睡/作息偏差→身体慢下来）、Touch Context（深夜安静回应/下午活跃回应）、Interaction Quality（安慰/回应高质量互动、刷屏扣分、过载说"有点晕"）、3D 身体（VRM Adapter：BodyState→BlendShape→three-vrm，懒加载分包）
+- **v0.5.0** — Avatar Intelligence（身体理解灵魂）：Capability Action 系统（情绪→候选动作→能力过滤→可用动作，行为按能力降级）、触摸交互（轻触/被抓/放下 + 拖拽惯性弹性晃动）、Body Memory（摸得越多越期待你靠近）、身体偏好持久化（瞬时状态永不落盘）、换身体仪式感（淡出→加载→淡入 + 换了一身新衣服）
+- **v0.4.0** — Avatar Foundation（身体层）：Avatar Engine（统一身体描述符 + 适配器注册表，UI 不知道格式）、身体切换（只写身体指向键，名字/记忆/人格/关系不动，测试锁定）、Sprite 活体化（视线跟随"偶尔偷看" + 重心摆动 + 情绪驱动 BodyState：呼吸速度/摆动幅度/视线频率）、设置页「身体」区、内置身体一等公民（绝不隐形）
 - **v0.3.4** — AI 稳定层：模型切换保护（换大脑不换灵魂，自动化测试锁定：人格/关系/记忆/身份在 GPT→DeepSeek→Ollama→自定义全链路切换后分毫不动）、大脑降级策略（云端失败自动降级本地大脑）、AI 状态身体反馈（思考时看向你、失联时嘀咕）、连接状态不永久显示成功（改配置/超 24h → 未验证）、成本 UI（本月各大脑消耗占比）、能力标签
 - **v0.3.3** — AI中心：Provider 层成型（用户只看到「AI大脑」）、自定义 API Provider（名称/地址/Key/模型，适配国内公司模型与中转服务）、一键连接测试（✓ 连接成功·延迟 230ms，错误人话化，不触碰已保存配置）、聊天标签显示「自定义 · 模型名」
 - **v0.3.2** — 砚灵居住空间（Companion Space）：设计系统（浅色/深色/跟随系统三主题、统一 token、玻璃卡片、`#66CCFF` 克制用色）、Companion Panel（砚灵本体+在线头部、弱化气泡、macOS 搜索式输入、第一次见面空状态）、气泡类型化（normal/care/thinking/warning/greeting）+ 看向→停顿→淡入节奏、设置中心四区（我的砚灵/AI大脑/数据/系统，关系状态人类化"认识X天"）、无新增 AI 能力
@@ -154,8 +210,28 @@ src/
 - [x] Shimeji 物理交互（抓取/甩动惯性/边缘反弹）+ 位置连续
 - [x] 双模态人格（专业 / 陪伴模式切换）
 - [x] 屏幕感知（前台窗口识别、会议/游戏/视频自动勿扰）
-- [ ] 触觉反馈（被摸/被拖身体反应）
-- [ ] 情绪身体表达（走路轻快/呼吸节奏）
+- [x] Avatar Engine（统一身体接口 + 适配器注册表 + 能力声明，VRM/Spine 注册即用）
+- [x] 身体切换（换身体不换灵魂：只写身体指向键，测试锁定）
+- [x] Sprite 活体化（视线跟随"偶尔偷看" + 重心摆动 + 情绪驱动身体参数）
+- [x] Capability Action 系统（情绪→候选动作→能力过滤→可用动作，行为按能力降级）
+- [x] 触摸交互（轻触/被抓惊讶/放下开心 + 拖拽惯性弹性晃动）+ Body Memory（触摸计数→期待靠近）
+- [x] 身体偏好持久化（视线/摆动/触摸开关，瞬时状态永不落盘）
+- [x] 换身体仪式感（淡出→加载→淡入，换衣服不是换角色）
+- [x] 触觉反馈（被摸/被拖身体反应 → 已落地：触摸交互 + Touch Context）
+- [x] 情绪身体表达（走路轻快/呼吸节奏 → 已落地：BodyState + 气质 + 世界调制）
+- [x] Body Expression Layer（长期关系/人格 → 连续气质）
+- [x] World → Body（生活环境：疲劳/晚睡/作息偏差进入身体）
+- [x] Interaction Quality（质量记忆：安慰/回应加分、刷屏扣分、过载休息；只影响熟悉感不碰灵魂）
+- [x] 3D 身体（VRM Adapter：BodyState→BlendShape→three-vrm，懒加载分包）
+- [x] Avatar SDK 冻结（sprite/live2d/vrm 三格式，能力词汇表白名单，docs/AVATAR_SDK.md）
+- [x] Mood 心境层（Emotion→Mood→Temperament 三层情绪，24h 快照加权合成）
+- [x] Life Timeline 成长经历（第一次换身体/命名/提醒休息/关系升级/灵魂恢复，随备份导出）
+- [x] Presence Budget（主动注视/散步每日稀缺，预算用完安静下来；用户不在时预算收紧）
+- [x] Soul Manifest 灵魂身份（soul_id 永不改变 + 诞生时间/版本 + 连续性指纹）
+- [x] Soul Archive 完整归档（导出=灵魂档案，导入=「欢迎回来」+ 连续性校验 + 恢复报告）
+- [x] 生命周期事件分级（major 永久 / normal 有限 / noise 不写）
+- [x] Brain Center（能力画像 + 更换大脑迁移仪式 + 高级设置温度 + 本地大脑一键安装）
 - [ ] 低功耗存在感（空闲降帧呼吸）
-- [ ] Identity 身份系统（跨身体/跨模型/跨设备"同一个砚灵"）
-- [ ] 社区桌宠资源生态（统一 Avatar 接口）
+- [ ] 身体库 Avatar Gallery（本地身体目录 + 在线资源，走 SDK 契约）
+- [ ] AI 身体生成（上传图片 → 活体化 / 一句话生成身体，输出仍是 SDK 描述符）
+- [ ] Identity 跨设备（Sync Layer：本地优先，用户主动同步，永不静默上传）

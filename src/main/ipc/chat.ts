@@ -7,11 +7,22 @@ import { cacheKey, getCachedReply, setCachedReply } from '../../core/cost/cache'
 import { getCurrentEmotion, emotionToExpression } from '../../core/soul/emotion'
 import { getDatabase } from '../../core/database'
 import { countMemories } from '../../core/soul/memory'
+import { hasLifeEvent, recordLifeEvent } from '../../core/soul/lifeTimeline'
+import { buildBrainProfile } from '../../core/brain/brainProfile'
+import { getConfig } from '../../core/config'
 
 export function registerChatHandlers(agent: Agent): void {
   ipcMain.handle('agent:chat', async (_event, message: string) => {
     const win = getMainWindow()
     if (!win || win.isDestroyed()) return { success: false, error: 'No window' }
+
+    // Life Timeline：第一次对话（幂等，只记一次；不打扰聊天）
+    try {
+      if (!hasLifeEvent('first_chat')) {
+        const short = message.length > 40 ? message.slice(0, 40) + '…' : message
+        recordLifeEvent('first_chat', '第一次对话', `你对它说了：「${short}」`, undefined, 'normal')
+      }
+    } catch { /* best-effort */ }
 
     try {
       const settings = getRouterSettings()
@@ -154,6 +165,31 @@ export function registerChatHandlers(agent: Agent): void {
     const active = agent.getActiveClientInfo()
     const local = agent.getLocalClientInfo()
     return { provider: active.provider, model: active.model, localModel: local?.model ?? null }
+  })
+
+  // Brain Center —— 砚灵的大脑（能力画像，不是参数列表）
+  ipcMain.handle('brain:getProfile', () => {
+    const active = agent.getActiveClientInfo()
+    const savedTemp = Number(getConfig(`temperature_${active.provider}`))
+    const profile = buildBrainProfile(
+      active.provider,
+      active.model,
+      Number.isFinite(savedTemp) && savedTemp >= 0 && savedTemp <= 2 ? savedTemp : undefined
+    )
+    // 端点：本地/自定义用已存配置
+    if (profile.isLocal || active.provider === 'custom') {
+      const savedUrl = getConfig(`${active.provider}_base_url`)
+      if (savedUrl) profile.endpoint = savedUrl
+    }
+    return profile
+  })
+
+  ipcMain.handle('brain:setTemperature', (_event, provider: string, temperature: number) => {
+    try {
+      return { success: true, temperature: agent.setTemperature(provider as Parameters<typeof agent.setTemperature>[0], temperature) }
+    } catch (e: any) {
+      return { success: false, error: e?.message ?? '设置失败' }
+    }
   })
 
   // Restore the most recent conversation from the database

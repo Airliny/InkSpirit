@@ -14,6 +14,8 @@ export interface AgentContext {
   mode: PersonalityMode
   /** One-line world awareness from the World Model (null when nothing to say) */
   situation?: string
+  /** Mood layer: 今天的心境（小时~天），与瞬间情绪区分 */
+  mood?: string
 }
 
 /**
@@ -32,6 +34,7 @@ export function buildSystemPrompt(ctx: AgentContext): ChatMessage {
   const memories = buildMemoryContext()
   const mode = buildModeHint(ctx.mode)
   const situation = ctx.situation ? `\n\n世界感知：${ctx.situation}` : ''
+  const mood = ctx.mood ? `\n\n今天的心境：${ctx.mood}` : ''
 
   const content = `${mode}
 
@@ -40,7 +43,7 @@ ${personality}
 ${emotion}
 
 ${relation}
-${memories}${situation}`
+${memories}${situation}${mood}`
 
   return { role: 'system', content }
 }
@@ -146,7 +149,8 @@ function buildRelationshipFeel(stage: RelationshipStage): string {
 }
 
 function buildMemoryContext(): string {
-  const memories = getRecentMemories(5)
+  // 被纠正过的记忆（corrected 标记）不进摘要——"记错了"之后不该再被提起
+  const memories = getRecentMemories(8).filter((m) => !m.tags.includes('corrected')).slice(0, 5)
   if (memories.length === 0) return ''
   const items = memories.map(m => m.content).join('\n- ')
   return `\n你记得这些事情：\n- ${items}\n`

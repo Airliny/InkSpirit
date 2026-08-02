@@ -25,10 +25,38 @@ export interface Memory {
 
 /** Producer-side effect: mark a memory as successfully recalled */
 export function recordMemoryRecall(memoryId: string): void {
+  lastRecalledMemoryId = memoryId
   const db = getDatabase()
   db.prepare(
     'UPDATE memories SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?'
   ).run(Date.now(), memoryId)
+}
+
+// 记忆纠正（correction）：被用户说"不对/记错了"的记忆要真正被削弱——
+// 不是"我记错了哈哈"就完了。被纠正过的记忆不再被主动提起。
+let lastRecalledMemoryId: string | null = null
+
+/**
+ * 用户否定了最近一次回忆（"不对，我没有说过"）→ 削弱该记忆：
+ * importance 减半（不再够格被"忽然想起"），并打上 corrected 标记
+ * （提示词记忆摘要会过滤它）。关系层已有 correction 事件，这里补记忆层。
+ */
+export function weakenWrongRecalledMemory(): void {
+  if (!lastRecalledMemoryId) return
+  const id = lastRecalledMemoryId
+  try {
+    const db = getDatabase()
+    const row = db.prepare('SELECT tags FROM memories WHERE id = ?').get(id) as { tags: string } | undefined
+    if (!row) return
+    let tags: string[] = []
+    try { tags = JSON.parse(row.tags) as string[] } catch { /* keep empty */ }
+    if (!tags.includes('corrected')) tags.push('corrected')
+    db.prepare(
+      'UPDATE memories SET importance = MAX(0.1, importance * 0.5), tags = ? WHERE id = ?'
+    ).run(JSON.stringify(tags), id)
+  } catch {
+    // best-effort
+  }
 }
 
 export function addMemory(

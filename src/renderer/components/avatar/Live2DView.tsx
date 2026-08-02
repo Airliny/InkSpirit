@@ -71,12 +71,14 @@ interface Live2DViewProps {
   state?: AnimationState
   width?: number
   height?: number
+  /** 视线方向（-1..1），模型支持时驱动 focus（偶尔偷看） */
+  look?: { x: number; y: number }
   onClick?: () => void
   /** Called when Live2D is unavailable — lets the parent fall back to sprites */
   onLoadError?: (reason: string) => void
 }
 
-export function Live2DView({ modelPath, state = 'idle', width = 200, height = 200, onClick, onLoadError }: Live2DViewProps) {
+export function Live2DView({ modelPath, state = 'idle', width = 200, height = 200, look, onClick, onLoadError }: Live2DViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const modelRef = useRef<any>(null)
   const [error, setError] = useState<string | null>(null)
@@ -96,6 +98,19 @@ export function Live2DView({ modelPath, state = 'idle', width = 200, height = 20
       // model may not have that motion
     }
   }, [state])
+
+  // Sprite 活体化：视线跟随（偶尔偷看）→ 模型 focus（不支持时静默忽略）
+  useEffect(() => {
+    const model = modelRef.current
+    if (!model || !look) return
+    try {
+      if (typeof model.focus === 'function') {
+        model.focus(look.x, look.y)
+      }
+    } catch {
+      // model may not support focus
+    }
+  }, [look?.x, look?.y])
 
   useEffect(() => {
     if (!canvasRef.current || !modelPath) return

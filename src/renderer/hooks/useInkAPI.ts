@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react'
+import type { AvatarDescriptor } from '../../core/avatar/types'
 
 declare global {
   interface Window {
@@ -12,6 +13,13 @@ declare global {
         history: { role: string; content: string }[]
       }>
       getModelInfo: () => Promise<{ provider: string; model: string; localModel: string | null }>
+      getBrainProfile: () => Promise<{
+        provider: string; model: string; name: string
+        capabilities: { chat: number; code: number; reasoning: number; speed: number }
+        contextK: number; temperature: number; endpoint: string; isLocal: boolean
+      }>
+      setBrainTemperature: (provider: string, temperature: number) =>
+        Promise<{ success: boolean; temperature?: number; error?: string }>
       getChatHistory: () => Promise<{ role: string; content: string }[]>
       clearChatHistory: () => Promise<{ success: boolean }>
       getConfig: (key: string) => Promise<string | null>
@@ -41,12 +49,38 @@ declare global {
       importModel: (spriteKey: string) => Promise<{ success: boolean; path?: string; error?: string }>
       importModelFromPath: (spriteKey: string, fp: string) => Promise<{ success: boolean; path?: string; error?: string }>
       importLive2DModel: () => Promise<{ success: boolean; path?: string; error?: string }>
+      importVrm: () => Promise<{ success: boolean; path?: string; error?: string }>
       getModelSprites: () => Promise<Record<string, string | null>>
       getModelType: () => Promise<string>
       getLive2DPath: () => Promise<string | null>
       hasModel: () => Promise<boolean>
       exportData: () => Promise<{ success: boolean; filePath?: string; error?: string }>
       importData: () => Promise<{ success: boolean; filePath?: string; error?: string }>
+
+      // Avatar Engine — 身体（UI 不知道格式，只知道这是一个身体）
+      listBodies: () => Promise<AvatarDescriptor[]>
+      getCurrentBodyId: () => Promise<string>
+      setCurrentBody: (id: string) => Promise<{ success: boolean; error?: string; body?: AvatarDescriptor }>
+      getBodyPrefs: () => Promise<{ lookFollow: boolean; sway: boolean; touchFeel: boolean }>
+      setBodyPrefs: (prefs: { lookFollow: boolean; sway: boolean; touchFeel: boolean }) =>
+        Promise<{ success: boolean; prefs: { lookFollow: boolean; sway: boolean; touchFeel: boolean } }>
+      getTouchQuality: () => Promise<number>
+      addInteraction: (kind: 'touch' | 'comfort' | 'respond' | 'spam') => Promise<number>
+
+      // Life Timeline — 成长经历（砚灵日志）
+      getLifeEvents: (limit?: number) => Promise<Array<{
+        id: string; eventType: string; title: string; detail: string | null; createdAt: number
+      }>>
+      getTodayLifeEvents: () => Promise<Array<{
+        id: string; eventType: string; title: string; detail: string | null; createdAt: number
+      }>>
+      getSoulManifest: () => Promise<{
+        soulId: string; createdAt: number; birthVersion: string; continuityOk: boolean; birthday: string
+      }>
+      getMoodState: () => Promise<{ valence: number; arousal: number; label: string }>
+      onPetMoodState: (callback: (data: { valence: number; arousal: number; label: string }) => void) => () => void
+      onPetWorld: (callback: (data: { fatigue: number; hourContext: string; sleepLate: boolean; busyDeviation: number; quietDeviation: number; streakMin: number; userPresent: boolean }) => void) => () => void
+      onAvatarCursor: (callback: (data: { x: number; y: number; near: boolean }) => void) => () => void
 
       // Chat events
       onChatChunk: (callback: (chunk: string) => void) => () => void

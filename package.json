@@ -1,7 +1,8 @@
 {
   "name": "inkspirit",
-  "version": "0.3.4",
+  "version": "0.9.1-preview",
   "description": "InkSpirit - AI Desktop Companion",
+  "license": "Apache-2.0",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -13,17 +14,20 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@pixiv/three-vrm": "^3.5.5",
     "better-sqlite3": "^11.0.0",
     "electron-updater": "^6.8.9",
     "node-fetch": "^2.7.0",
     "openai": "^4.50.0",
     "pixi-live2d-display": "^0.4.0",
+    "three": "^0.185.1",
     "whatwg-url": "5.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.185.3",
     "@vitejs/plugin-react": "^4.3.0",
     "electron": "^28.1.0",
     "electron-builder": "^24.9.1",

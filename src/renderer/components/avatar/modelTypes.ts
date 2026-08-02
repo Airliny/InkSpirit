@@ -1,24 +1,8 @@
-export type AnimationState =
-  | 'idle' | 'walk' | 'sleep' | 'sit' | 'stretch'
-  | 'yawn' | 'surprised' | 'happy' | 'sad' | 'love' | 'blink'
+/** 兼容层：旧代码从这里导入类型；新代码请走 core/avatar（Avatar Engine） */
+import type { AnimationState, SpriteSource } from '../../../core/avatar/types'
+export type { AnimationState, SpriteSource, Live2DSource, ModelSource } from '../../../core/avatar/types'
 
-export interface SpriteSource {
-  idle?: string; walk?: string; sleep?: string; sit?: string
-  stretch?: string; yawn?: string; surprised?: string
-  happy?: string; sad?: string; love?: string
-}
-
-export interface Live2DSource {
-  type: 'live2d' | 'spine'
-  modelPath: string
-}
-
-export type ModelSource =
-  | { type: 'builtin' }
-  | { type: 'sprites'; sprites: SpriteSource }
-  | { type: 'live2d'; live2d: Live2DSource }
-
-export function resolveSpriteUrl(source: ModelSource, state: AnimationState): string | null {
+export function resolveSpriteUrl(source: { type: 'sprites'; sprites: SpriteSource }, state: AnimationState): string | null {
   if (source.type === 'sprites') {
     const map: Record<string, string | undefined> = {
       idle: source.sprites.idle,

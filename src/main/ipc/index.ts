@@ -7,6 +7,8 @@ import { registerDataHandlers } from './data'
 import { registerUpdateHandlers } from './update'
 import { registerModelHandlers } from './model'
 import { registerCostHandlers } from './cost'
+import { registerAvatarHandlers } from './avatar'
+import { registerLifeHandlers } from './life'
 
 export function registerIpcHandlers(agent: Agent): void {
   registerChatHandlers(agent)
@@ -16,4 +18,6 @@ export function registerIpcHandlers(agent: Agent): void {
   registerUpdateHandlers()
   registerModelHandlers(agent)
   registerCostHandlers()
+  registerAvatarHandlers()
+  registerLifeHandlers()
 }

@@ -26,9 +26,12 @@ let inertiaTimer: ReturnType<typeof setInterval> | null = null
 let isInertia = false
 let hangTimer: ReturnType<typeof setTimeout> | null = null
 let isHanging = false
+let cursorTimer: ReturnType<typeof setInterval> | null = null
 
 const PET_W = PET_SIZE.width
 const PET_H = PET_SIZE.height
+/** 视线跟随半径（px）—— 游标进入这个范围才可能被"偷看" */
+const CURSOR_LOOK_RADIUS = 320
 
 function loadSavedPetPosition(): { x: number; y: number } | null {
   const raw = getConfig('window_pet_position')
@@ -105,10 +108,12 @@ export function setPetMode(): void {
   mainWindow.setHasShadow(false)
   mainWindow.setIgnoreMouseEvents(false)
   if (!mainWindow.isDestroyed()) mainWindow.webContents.send('window:mode', 'pet')
+  startCursorPush()
 }
 
 export function setPanelMode(): void {
   if (!mainWindow) return
+  stopCursorPush()
   isPetMode = false
   // pet → panel: remember the pet's home; panel has its own position
   const [x, y] = mainWindow.getPosition()
@@ -334,6 +339,35 @@ export function toggleAlwaysOnTop(): boolean {
   const current = mainWindow.isAlwaysOnTop()
   mainWindow.setAlwaysOnTop(!current, 'floating')
   return !current
+}
+
+/**
+ * 游标位置推送（桌宠模式，约 5Hz）：渲染层据此实现"偶尔偷看"的视线跟随。
+ * 相对桌宠中心偏移（DIP）。电量开销可忽略。
+ */
+function startCursorPush(): void {
+  stopCursorPush()
+  if (!mainWindow) return
+  cursorTimer = setInterval(() => {
+    const win = mainWindow
+    if (!win || win.isDestroyed() || !win.isVisible() || !isPetMode) return
+    const cursor = screen.getCursorScreenPoint()
+    const [wx, wy] = win.getPosition()
+    const rx = cursor.x - (wx + PET_W / 2)
+    const ry = cursor.y - (wy + PET_H / 2)
+    win.webContents.send('avatar:cursor', {
+      x: rx,
+      y: ry,
+      near: Math.abs(rx) < CURSOR_LOOK_RADIUS && Math.abs(ry) < CURSOR_LOOK_RADIUS
+    })
+  }, 200)
+}
+
+function stopCursorPush(): void {
+  if (cursorTimer) {
+    clearInterval(cursorTimer)
+    cursorTimer = null
+  }
 }
 
 export function toggleVisibility(): void {

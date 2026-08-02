@@ -1,13 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { Avatar } from '../components/avatar/Avatar'
-import { Live2DView } from '../components/avatar/Live2DView'
+import { BodyAvatar } from '../avatar/BodyAvatar'
 import { ChatBubble } from '../components/chat/ChatBubble'
 import { ChatInput, type ChatInputHandle } from '../components/chat/ChatInput'
-import type { ModelSource, AnimationState } from '../components/avatar/modelTypes'
+import type { AvatarDescriptor, AnimationState } from '../../core/avatar/types'
 import { captureScroll, restoreScroll, saveChatScroll, getSavedChatScroll, isNearBottom } from '../chatScroll'
 
 interface ChatViewProps {
-  modelSource: ModelSource
+  body: AvatarDescriptor
   state: AnimationState
   messages: { role: 'user' | 'assistant'; content: string }[]
   isStreaming: boolean
@@ -23,7 +22,7 @@ interface ChatViewProps {
   petName?: string
 }
 
-export function ChatView({ modelSource, state, messages, isStreaming, modelInfo, lastRoute, onSend, onBackToPet, onOpenSettings, active, activity, petName }: ChatViewProps) {
+export function ChatView({ body, state, messages, isStreaming, modelInfo, lastRoute, onSend, onBackToPet, onOpenSettings, active, activity, petName }: ChatViewProps) {
   const bubblesRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<ChatInputHandle>(null)
   const didInit = useRef(false)
@@ -101,11 +100,7 @@ export function ChatView({ modelSource, state, messages, isStreaming, modelInfo,
     <div className="chat-panel">
       <div className="companion-header">
         <div className="companion-avatar" onClick={onBackToPet} title="回到桌面">
-          {modelSource.type === 'live2d' ? (
-            <Live2DView modelPath={modelSource.live2d.modelPath} state={state} width={44} height={44} />
-          ) : (
-            <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={state} size={44} />
-          )}
+          <BodyAvatar body={body} state={state} size={44} />
         </div>
         <div className="companion-id">
           <div className="companion-name" onClick={onBackToPet}>{name}</div>
@@ -123,11 +118,7 @@ export function ChatView({ modelSource, state, messages, isStreaming, modelInfo,
         {messages.length === 0 && (
           <div className="chat-presence">
             <div className="chat-presence-avatar">
-              {modelSource.type === 'live2d' ? (
-                <Live2DView modelPath={modelSource.live2d.modelPath} state={state} width={76} height={76} />
-              ) : (
-                <Avatar sprites={modelSource.type === 'sprites' ? modelSource.sprites : {}} state={state} size={76} />
-              )}
+              <BodyAvatar body={body} state={state} size={76} />
             </div>
             <div className="chat-presence-text">
               <strong>{name}</strong> 在这里。

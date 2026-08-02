@@ -22,6 +22,10 @@ import { getMemorableMemory, recordMemoryRecall, consolidateMemories, decayMemor
 import { feed, refreshPatternContext, getLatestSituation } from '../core/world/sensor'
 import { recordActiveMinutes, prunePatternRows } from '../core/world/patternsStore'
 import { toDateKey } from '../core/world/patterns'
+import { getCurrentMood } from '../core/soul/mood'
+import { recordLifeEvent, pruneLifeEvents } from '../core/soul/lifeTimeline'
+import { emptyPresenceBudget, spendPresence, dateKeyOf } from '../core/avatar/presenceBudget'
+import type { PresenceBudgetState } from '../core/avatar/presenceBudget'
 import { pathToFileURL } from 'url'
 import { migrateToSecure } from '../core/secureStore'
 import { preloadConfig, getConfig, setConfig } from '../core/config'
@@ -35,6 +39,12 @@ let totalWorkMin = 0
 let lastImpulseWasAt = Date.now()
 let currentScene: ForegroundScene = 'work'
 let behaviorBudget: BudgetState = createBudget(3)
+/** Presence Budget：身体行为的每日稀缺（注视/散步/注意） */
+let presenceBudgetState: PresenceBudgetState = emptyPresenceBudget(dateKeyOf(Date.now()))
+/** 渲染进程崩溃自动重载的防循环护栏 */
+let rendererReloadCount = 0
+let lastRendererReloadAt = 0
+const RENDERER_RELOAD_GUARD_MS = 2 * 60 * 1000
 let userReturnedAfterMs = 0
 let userReturnedAt = 0
 let lastRecallMemory: import('../core/soul/memory').Memory | null = null
@@ -55,6 +65,19 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   writeLog(`unhandledRejection: ${String(reason)}`)
 })
+
+// 单实例锁：双击/重复启动 → 聚焦已有窗口，绝不出现两个砚灵
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      if (!win.isVisible()) win.show()
+      win.focus()
+    }
+  })
+}
 
 /**
  * Recovery Mode: DB is unusable. Native dialog only — no business tables,
@@ -156,6 +179,21 @@ app.whenReady().then(() => {
   const win = createMainWindow()
   win.webContents.on('render-process-gone', (_e, details) => {
     writeLog(`render-process-gone: ${details.reason} (${details.exitCode})`)
+    // 渲染进程崩溃 → 白屏是桌宠最坏的失败方式：自动重载恢复（防无限循环）
+    if (details.reason !== 'clean-exit') {
+      const now = Date.now()
+      if (now - lastRendererReloadAt > RENDERER_RELOAD_GUARD_MS) rendererReloadCount = 0
+      rendererReloadCount++
+      lastRendererReloadAt = now
+      if (rendererReloadCount <= 3 && !win.isDestroyed()) {
+        writeLog(`reloading renderer (attempt ${rendererReloadCount})`)
+        setTimeout(() => {
+          if (!win.isDestroyed()) win.webContents.reload()
+        }, 800)
+      } else {
+        writeLog(`renderer crash loop — giving up auto-reload`)
+      }
+    }
   })
   win.webContents.on('console-message', (_e, level, message) => {
     if (level >= 3) writeLog(`renderer[${level}]: ${message}`)
@@ -226,6 +264,7 @@ function startPerception(): void {
 }
 
 // ---- Heartbeat: drive-based, irregular ----
+let lastMoodPushAt = 0
 function startHeartbeat(): void {
   // Tick every ~8 seconds with some jitter
   const tickRate = 8000 + Math.random() * 4000
@@ -234,6 +273,13 @@ function startHeartbeat(): void {
     const elapsed = (Date.now() - lastImpulseWasAt) / 1000
     tick(elapsed, userIdleMs) // drive dynamics only — the director decides action
     lastImpulseWasAt = Date.now()
+
+    // Mood（心境）层：约 5 分钟推一次给身体（Emotion→Mood→Temperament）
+    if (Date.now() - lastMoodPushAt > 5 * 60 * 1000) {
+      lastMoodPushAt = Date.now()
+      const mood = getCurrentMood()
+      emit('pet:moodState', { valence: mood.valence, arousal: mood.arousal, label: mood.label })
+    }
 
     const { action, budget: nextBudget } = decide(buildDirectorInput())
     behaviorBudget = nextBudget
@@ -284,6 +330,17 @@ function buildDirectorInput(): DirectorInput {
   }
   lastStage = currentStage
 
+  // Guardian 信号：进导演（它只输出意图），同时记入 Life Timeline（每天去重）
+  const guardianSignal = pollGuardian()
+  if (guardianSignal) {
+    recordLifeEvent(
+      'rest_reminder',
+      '提醒你休息',
+      '它主动关心你的身体',
+      `rest_reminder_${dateKeyOf(Date.now())}`, 'normal'
+    )
+  }
+
   return {
     situation: getLatestSituation(),
     relationship: getRelationship(),
@@ -297,11 +354,20 @@ function buildDirectorInput(): DirectorInput {
       recallableMemory: recallable,
       recollectSnippet: mem ? (mem.content.length > 24 ? mem.content.slice(0, 24) + '…' : mem.content) : null,
       canHang: !isDisturbing() && userIdleMs < 90000 && Date.now() - lastHangAt >= HANG_COOLDOWN_MS,
-      guardianSignal: pollGuardian(),
+      guardianSignal,
       stageGrowTo: pendingStageGrow
     },
     budget: behaviorBudget
   }
+}
+
+/** 关系阶段的人类化标签（Life Timeline 用） */
+function stageLabelOf(stage: string): string {
+  const map: Record<string, string> = {
+    stranger: '陌生人', acquaintance: '相识', friend: '朋友',
+    close_friend: '挚友', partner: '伴侣'
+  }
+  return map[stage] ?? stage
 }
 
 /** Single executor for director output: renderer channels + traceable logs */
@@ -328,7 +394,12 @@ function actOn(action: BehaviorAction): void {
       if (ev) recordRelationshipEvent(ev)
     }
   }
-  if (action.id === 'stage_grow') pendingStageGrow = null
+  if (action.id === 'stage_grow') {
+    pendingStageGrow = null
+    // Life Timeline：关系升级（导演表达过之后才记录）
+    const stage = getRelationship().stage
+    recordLifeEvent('stage_grow', '关系更进一步', `进入了「${stageLabelOf(stage)}」阶段`, `stage_${stage}`, 'major')
+  }
   if (action.id === 'hang_window') lastHangAt = Date.now()
 
   try {
@@ -359,11 +430,31 @@ function emitIdleBehavior(): void {
   const emotion = getCurrentEmotion()
   const style = getBehaviorStyle()
 
-  emit('pet:behavior', { behavior: pickIdleAnimation(emotion.energy, Math.random()) })
+  // Presence Budget：主动散步每天有上限——频繁走动会变成"动画插件"；
+  // 用户长期不在时预算收紧（安静是亲密，不是更积极）
+  let behavior = pickIdleAnimation(emotion.energy, Math.random())
+  if (behavior === 'walk') {
+    const spend = spendPresence(presenceBudgetState, 'wander', Date.now(), { userPresent: userIdleMs < 60000 })
+    presenceBudgetState = spend.state
+    if (!spend.allowed) behavior = 'idle'
+  }
+  emit('pet:behavior', { behavior })
 
   // Ambient inner monologue (presence, not intent)
   const thought = pickAmbientThought(style.idleThoughtChance, Math.random())
   if (thought) emit('pet:thought', { thought })
+}
+
+// ---- Rest reminder: guardian emits intent, director expresses it ----
+// Life Timeline：第一次主动提醒休息（每天去重）
+function recordGuardianLifeEvent(signal: ReturnType<typeof pollGuardian>): void {
+  if (!signal) return
+  recordLifeEvent(
+    'rest_reminder',
+    '提醒你休息',
+    '它第一次主动关心你的身体',
+    `rest_reminder_${dateKeyOf(Date.now())}`, 'normal'
+  )
 }
 
 // ---- Scene awareness: what kind of app the user is in (for don't-disturb) ----
@@ -406,9 +497,28 @@ function startWorldSensor(): void {
       streakMin: getCurrentStreakMin(),
       hour: new Date().getHours()
     })
+    pushWorldToBody()
   }
   tick()
   setInterval(tick, 30000)
+}
+
+/**
+ * World → Body 桥：把生活环境精简信号推给身体（疲劳/深夜/晚睡/作息偏差）。
+ * 身体据此慢下来或精神起来——不是播放动画，是真的在那里生活。
+ */
+function pushWorldToBody(): void {
+  const s = getLatestSituation()
+  if (!s) return
+  emit('pet:world', {
+    fatigue: s.fatigue,
+    hourContext: s.hourContext,
+    sleepLate: !!s.patterns?.sleepLate,
+    busyDeviation: s.patterns?.busyDeviation ?? 0,
+    quietDeviation: s.patterns?.quietDeviation ?? 0,
+    streakMin: s.streakMin,
+    userPresent: userIdleMs < 60000
+  })
 }
 
 function startPatternRecording(): void {
@@ -510,8 +620,10 @@ function startMemoryMaintenance(): void {
       db.prepare(
         `DELETE FROM behavior_logs WHERE id NOT IN (
            SELECT id FROM behavior_logs ORDER BY timestamp DESC LIMIT 500
-         )`
+          )`
       ).run()
+      // Life Timeline 分级清理：major 永久保留，normal 保留最近 200 条/365 天
+      pruneLifeEvents()
       if (consolidated > 0 || decayed > 0) {
         db.prepare(
           'INSERT INTO behavior_logs (id, behavior_id, triggered_by, outcome, timestamp) VALUES (?, ?, ?, ?, ?)'

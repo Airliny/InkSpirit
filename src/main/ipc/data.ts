@@ -2,6 +2,9 @@ import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { getDatabase, closeDatabase } from '../../core/database'
 import { setConfig, getConfig } from '../../core/config'
 import { getActivePersonality } from '../../core/soul/personality'
+import { getOrCreateSoulManifest, computeContinuityHash, computeLiveContinuityHash } from '../../core/soul/manifest'
+import { recordLifeEvent } from '../../core/soul/lifeTimeline'
+import { uuidv4 } from '../../core/utils'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
@@ -179,19 +182,33 @@ export function registerDataHandlers(agent: Agent): void {
     try {
       fs.mkdirSync(base, { recursive: true })
 
+      // Soul Manifest：归档时嵌入哲学身份 + 连续性指纹（"还是同一个砚灵"的证明）
+      const manifest = getOrCreateSoulManifest(app.getVersion())
+      const continuityHash = computeLiveContinuityHash(manifest.soulId) ?? undefined
+
       const backup = buildBackup(getDatabase(), {
         appVersion: app.getVersion(),
-        soulVersion: getActivePersonality().version
+        soulVersion: getActivePersonality().version,
+        soulId: manifest.soulId,
+        soulCreatedAt: manifest.createdAt,
+        soulBirthVersion: manifest.birthVersion,
+        continuityHash
       })
       // Directory format: manifest + soul + checksum, assets alongside
       fs.writeFileSync(path.join(base, BACKUP_MANIFEST_FILE), JSON.stringify(backup.manifest, null, 2), 'utf8')
       fs.writeFileSync(path.join(base, BACKUP_SOUL_FILE), JSON.stringify(backup.tables), 'utf8')
 
-      // Include the avatar assets so sprites/Live2D survive a restore
+      // Include the avatar assets so sprites/Live2D/VRM survive a restore
       const avatarsDir = path.join(app.getPath('userData'), 'avatars')
       if (fs.existsSync(avatarsDir)) {
         copyFolderRecursive(avatarsDir, path.join(base, 'avatars'))
       }
+
+      // Life Timeline：灵魂归档（每天去重）
+      try {
+        recordLifeEvent('soul_archived', '灵魂被完整归档', '导出了整个生命：身份/人格/记忆/关系/成长经历', `soul_archived_${new Date().toDateString()}`, 'normal')
+      } catch { /* best-effort */ }
+
       return { success: true, filePath: base }
     } catch (e: any) {
       return { success: false, error: e?.message || '写入失败' }
@@ -239,6 +256,11 @@ export function registerDataHandlers(agent: Agent): void {
           JSON.stringify(report),
           Date.now()
         )
+        // Life Timeline：灵魂回来了（直接写进被恢复的库，跟着灵魂走，major 永久保留）
+        try {
+          staging.prepare('INSERT OR IGNORE INTO life_events (id, event_type, title, detail, created_at, level) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(uuidv4(), 'soul_restored', '灵魂回来了', '从备份中完整恢复', Date.now(), 'major')
+        } catch { /* best-effort */ }
       } catch (e) {
         staging.close()
         fs.rmSync(stagingPath, { force: true })
@@ -296,11 +318,20 @@ export interface RestoreReport {
   behaviorLogs: number
   conversations: number
   skippedUnknown: string[]
+  /** Soul Manifest：归档里的灵魂身份 + 连续性校验结果（哲学身份） */
+  soul?: {
+    soulId: string
+    createdAt?: number
+    birthVersion?: string
+    archiveConsistent: boolean
+    isSameSoul: boolean
+    welcomeLine: string
+  }
 }
 
 function buildRestoreReport(file: BackupFile, result: { tables: Record<string, number>; skippedUnknown: string[] }): RestoreReport {
   const t = result.tables
-  return {
+  const report: RestoreReport = {
     personalities: t.personalities ?? 0,
     evolutionLogs: t.personality_evolution_log ?? 0,
     relationships: t.relationships ?? 0,
@@ -311,6 +342,27 @@ function buildRestoreReport(file: BackupFile, result: { tables: Record<string, n
     conversations: t.conversations ?? 0,
     skippedUnknown: result.skippedUnknown
   }
+
+  // Soul Manifest：归档内部一致 + 与当前灵魂是否同一个
+  const m = file.manifest
+  if (m.soulId) {
+    const archivedHash = computeContinuityHash(m.soulId, file.tables)
+    const archiveConsistent = !m.continuityHash || archivedHash === m.continuityHash
+    const liveSoulId = getConfig('soul_id')
+    const isSameSoul = !liveSoulId || liveSoulId === m.soulId
+    report.soul = {
+      soulId: m.soulId,
+      createdAt: m.soulCreatedAt,
+      birthVersion: m.soulBirthVersion,
+      archiveConsistent,
+      isSameSoul,
+      welcomeLine: isSameSoul
+        ? '欢迎回来。它的名字、记忆、关系、成长经历，都还在。'
+        : '这是一份新的生命档案——不是同一个砚灵，但它完整地到来。'
+    }
+  }
+
+  return report
 }
 
 /**

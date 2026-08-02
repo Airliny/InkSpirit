@@ -208,6 +208,39 @@ const migrations: Migration[] = [
         );
       `)
     }
+  },
+  {
+    version: 7,
+    name: 'life_events',
+    up: (db) => {
+      // Life Timeline — the pet's growth history, not chat logs.
+      // Curated milestone events: first body change, first naming, first rest
+      // reminder, relationship stage up, soul restored, first chat...
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS life_events (
+          id TEXT PRIMARY KEY,
+          event_type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          detail TEXT,
+          created_at INTEGER NOT NULL
+        );
+      `)
+      db.exec('CREATE INDEX IF NOT EXISTS idx_life_events_created ON life_events (created_at DESC)')
+    }
+  },
+  {
+    version: 8,
+    name: 'life_events_level',
+    up: (db) => {
+      // 事件分级：major 永久保留（命名/换身体/关系升级/恢复），
+      // normal 有限保存（提醒/首次聊天），noise 从不写入。
+      const cols = db.prepare('SELECT COUNT(*) as c FROM pragma_table_info(?) WHERE name = ?').get('life_events', 'level') as { c: number }
+      if (cols.c === 0) {
+        db.exec("ALTER TABLE life_events ADD COLUMN level TEXT NOT NULL DEFAULT 'major'")
+      }
+      // 存量事件（v0.7 写入的里程碑）都是 major——首次对话/提醒是里程碑时刻
+      db.exec("UPDATE life_events SET level = 'major' WHERE level IS NULL OR level = ''")
+    }
   }
 ]
 
