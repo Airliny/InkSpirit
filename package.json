@@ -3,6 +3,7 @@
   "version": "0.9.1-preview",
   "description": "InkSpirit - AI Desktop Companion",
   "license": "Apache-2.0",
+  "author": "InkSpirit Contributors",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

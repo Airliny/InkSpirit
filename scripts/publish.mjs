@@ -64,10 +64,20 @@ function buildManifest() {
   }
 }
 
-const api = (method, url, body) => execSync(
-  `curl -s -L -X ${method} "${url}" -H "Authorization: Bearer ${token}" -H "Accept: application/vnd.github+json" ${body ? `-d '${JSON.stringify(body)}'` : ''}`,
-  { encoding: 'utf8' }
-)
+const api = (method, url, body) => {
+  // Body via temp file: release notes contain backticks/quotes that break
+  // shell quoting when inlined (`-d '...'`). Use --data-binary @file instead.
+  let dataArg = ''
+  if (body !== undefined) {
+    const tmp = resolve(root, 'dist', '.release-body.json')
+    writeFileSync(tmp, JSON.stringify(body), 'utf8')
+    dataArg = ` --data-binary @"${tmp}"`
+  }
+  return execSync(
+    `curl -s -L -X ${method} "${url}" -H "Authorization: Bearer ${token}" -H "Accept: application/vnd.github+json"${dataArg}`,
+    { encoding: 'utf8' }
+  )
+}
 
 const upload = (url, file, name) => execSync(
   `curl -s -L -X POST "${url}?name=${encodeURIComponent(name)}" -H "Authorization: Bearer ${token}" -H "Content-Type: application/octet-stream" --data-binary @"${file}"`,
