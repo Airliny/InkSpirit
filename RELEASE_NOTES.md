@@ -1,10 +1,10 @@
-## InkSpirit v0.9.2-rc2 — First Stability Release Candidate
+## InkSpirit v0.9.3-rc2 — First Stability Release Candidate
 
-**稳定性修复版（Release Candidate）。** 这一版不是预览功能版——v0.9.2 的目标只有一个：
+**稳定性修复版（Release Candidate）。** 这一版不是预览功能版——v0.9.3 的目标只有一个：
 
 > 任何用户下载安装后，第一次启动都必须看到砚灵，并且所有失败都有可恢复路径。
 
-InkSpirit 0.9.2 focuses on reliability. InkSpirit now guarantees:
+InkSpirit 0.9.3 focuses on reliability. InkSpirit now guarantees:
 
 - The companion appears on first launch
 - Avatar failures fallback safely
