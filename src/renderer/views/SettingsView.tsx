@@ -3,7 +3,7 @@ import type { AvatarDescriptor, SpriteSource } from '../../core/avatar/types'
 import { DEFAULT_BODY_PREFERENCES } from '../../core/avatar/preferences'
 import type { BodyPreferences } from '../../core/avatar/preferences'
 import { qualityStage } from '../../core/avatar/touchQuality'
-import { LIFE_EVENT_ICONS } from '../../core/soul/lifeTimeline'
+import { LIFE_EVENT_ICONS } from '../../core/soul/lifeEventModel'
 import { loadThemePreference, saveThemePreference, type ThemePreference } from '../design/theme'
 
 interface SettingsViewProps {

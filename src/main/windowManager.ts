@@ -372,7 +372,7 @@ function startCursorPush(): void {
   if (!mainWindow) return
   cursorTimer = setInterval(() => {
     const win = mainWindow
-    if (!win || win.isDestroyed() || !win.isVisible() || !isPetMode) return
+    if (!win || win.isDestroyed() || win.webContents.isCrashed() || !win.isVisible() || !isPetMode) return
     const cursor = screen.getCursorScreenPoint()
     const [wx, wy] = win.getPosition()
     const rx = cursor.x - (wx + PET_W / 2)

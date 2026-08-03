@@ -1,5 +1,7 @@
 import { getDatabase } from '../database'
 import { uuidv4 } from '../utils'
+import type { LifeEvent, LifeEventLevel, LifeEventType } from './lifeEventModel'
+import { NORMAL_RETAIN, NORMAL_RETAIN_DAYS } from './lifeEventModel'
 
 /**
  * Life Timeline —— 砚灵的成长经历。
@@ -12,47 +14,13 @@ import { uuidv4 } from '../utils'
  *   major  必须保存 —— 命名/换身体/关系升级/灵魂恢复/诞生
  *   normal 有限保存 —— 提醒休息/首次聊天/记忆留存（定期清理，保留最近 200 条/365 天）
  *   noise  绝不写入 —— 普通聊天/触摸/表情
+ *
+ * 纯模型（类型 + LIFE_EVENT_ICONS）在 lifeEventModel.ts —— 渲染进程
+ * 导入的是那个文件；本文件只有数据库访问。
  */
 
-export type LifeEventType =
-  | 'soul_created'    // 砚灵诞生
-  | 'body_changed'    // 第一次换身体
-  | 'named'           // 被赋予名字
-  | 'first_chat'      // 第一次对话
-  | 'rest_reminder'   // 主动提醒休息
-  | 'stage_grow'      // 关系升级
-  | 'soul_restored'   // 灵魂恢复（备份恢复）
-  | 'soul_archived'   // 灵魂归档（导出）
-  | 'memory_kept'     // 第一次记住重要的事
-  | 'milestone'       // 其他里程碑
-
-export type LifeEventLevel = 'major' | 'normal'
-
-/** normal 级事件的保留策略：保留最近 200 条，且不超过 365 天 */
-export const NORMAL_RETAIN = 200
-export const NORMAL_RETAIN_DAYS = 365
-
-export interface LifeEvent {
-  id: string
-  eventType: LifeEventType
-  title: string
-  detail: string | null
-  createdAt: number
-  level: LifeEventLevel
-}
-
-export const LIFE_EVENT_ICONS: Record<LifeEventType, string> = {
-  soul_created: '✨',
-  body_changed: '🔄',
-  named: '📛',
-  first_chat: '💬',
-  rest_reminder: '☕',
-  stage_grow: '🌱',
-  soul_restored: '📦',
-  soul_archived: '📤',
-  memory_kept: '💎',
-  milestone: '⭐'
-}
+export type { LifeEvent, LifeEventType, LifeEventLevel } from './lifeEventModel'
+export { LIFE_EVENT_ICONS, NORMAL_RETAIN, NORMAL_RETAIN_DAYS } from './lifeEventModel'
 
 /** 记录一条生命事件；同类事件可去重（如休息提醒每天只记一次） */
 export function recordLifeEvent(

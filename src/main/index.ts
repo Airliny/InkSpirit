@@ -144,7 +144,8 @@ function escalateRendererCrash(win: BrowserWindow, reason: string): void {
     logTo('renderer', `reloading renderer (2) — ${reason}, entering safe mode`)
     writeStartupLog(`renderer crash twice (${reason}) — entering safe mode`)
     enterSafeMode()
-    if (!win.isDestroyed()) win.webContents.send('app:safeMode')
+    // 崩溃瞬间 frame 已销毁，广播会刷错误；新渲染进程通过 system:getSafeMode 查询
+    if (!win.isDestroyed() && !win.webContents.isCrashed()) win.webContents.send('app:safeMode')
     reloadRenderer(win)
     return
   }
@@ -659,7 +660,9 @@ async function maybeHangOnWindow(): Promise<void> {
 
 function emit(channel: string, data: Record<string, unknown>): void {
   const win = getMainWindow()
-  if (win && !win.isDestroyed()) win.webContents.send(channel, data)
+  // isCrashed 护栏：渲染进程崩溃后 frame 已销毁，send 只会刷 "Render frame was
+  // disposed" 错误——恢复链重载完成后自动恢复推送。
+  if (win && !win.isDestroyed() && !win.webContents.isCrashed()) win.webContents.send(channel, data)
 }
 
 // ---- Mood sync: push real soul state to the renderer ----

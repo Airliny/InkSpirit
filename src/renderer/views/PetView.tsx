@@ -10,8 +10,8 @@ import type { WorldBodySignals } from '../../core/avatar/expressionLayer'
 import { comfortFromQuality, emptyClickTracker, qualityStage, trackClick } from '../../core/avatar/touchQuality'
 import { emptyLookControl, updateLook } from '../../core/avatar/lookTarget'
 import { emptyPresenceBudget, spendPresence, dateKeyOf } from '../../core/avatar/presenceBudget'
-import { moodBodyModifiers } from '../../core/soul/mood'
-import type { MoodState } from '../../core/soul/mood'
+import { moodBodyModifiers } from '../../core/soul/moodModel'
+import type { MoodState } from '../../core/soul/moodModel'
 import type { AvatarExpression } from '../stores/avatarStore'
 
 /** 气泡类型 — 全应用统一，不在别处各自造 */
