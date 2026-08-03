@@ -19,7 +19,7 @@ let lastManifest: UpdateManifest | null = null
 
 function send(channel: string, data?: unknown): void {
   const win = getMainWindow()
-  if (win && !win.isDestroyed()) win.webContents.send(channel, data)
+  if (win && !win.isDestroyed() && !win.webContents.isCrashed()) win.webContents.send(channel, data)
 }
 
 /**

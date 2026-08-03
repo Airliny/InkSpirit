@@ -31,6 +31,9 @@ win:
       arch: [x64]
   icon: resources/icon.ico
 
+linux:
+  icon: resources/icon.png
+
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

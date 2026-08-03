@@ -17,7 +17,7 @@ describe('全新安装：无任何模型资产', () => {
   })
 
   it('BUILTIN_BODY_DESCRIPTOR 恒可用：无需 IPC/资产，渲染层可直接兜底', () => {
-    // v0.9.3-rc2 P0：currentBody 为空（IPC 挂死/列表空）→ 渲染层用纯客户端常量兜底
+    // v0.9.3 P0：currentBody 为空（IPC 挂死/列表空）→ 渲染层用纯客户端常量兜底
     expect(BUILTIN_BODY_DESCRIPTOR.id).toBe(BUILTIN_BODY_ID)
     expect(BUILTIN_BODY_DESCRIPTOR.type).toBe('builtin')
     expect(BUILTIN_BODY_DESCRIPTOR.source.kind).toBe('builtin')

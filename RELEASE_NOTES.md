@@ -1,6 +1,6 @@
-## InkSpirit v0.9.3-rc2 — First Stability Release Candidate
+## InkSpirit v0.9.3 — First Stability Release（正式版）
 
-**稳定性修复版（Release Candidate）。** 这一版不是预览功能版——v0.9.3 的目标只有一个：
+**稳定性修复版（正式版）。** 这一版不是预览功能版——v0.9.3 的目标只有一个：
 
 > 任何用户下载安装后，第一次启动都必须看到砚灵，并且所有失败都有可恢复路径。
 
@@ -12,7 +12,13 @@ InkSpirit 0.9.3 focuses on reliability. InkSpirit now guarantees:
 - Settings remain available independently
 - Soul data stays protected
 
-RC 阶段**冻结**：Soul · Brain · Avatar SDK · Relationship · Memory。不改结构，只验收真实用户环境（Windows 10 办公机 / Windows 11 多显示器 / DPI 缩放 / 睡眠唤醒）。
+本轮发布**冻结**：Soul · Brain · Avatar SDK · Relationship · Memory。不改结构，只验收真实用户环境（Windows 10 办公机 / Windows 11 多显示器 / DPI 缩放 / 睡眠唤醒）。
+
+### 0.9.3 正式版新增（相对 RC）
+
+- **修复白屏根因（桌宠不显示 / 设置打不开）**：`PetView` / `SettingsView` 曾直接导入数据库模块（`core/soul/mood`、`core/soul/lifeTimeline`），把 better-sqlite3 原生模块带进了渲染进程 bundle，页面加载即崩溃（`promisify is not a function`）→ 整窗白屏。已拆分纯模型层（`moodModel.ts` / `lifeEventModel.ts`），渲染进程只导入纯逻辑；新增静态依赖隔离守卫测试，禁止渲染进程再触及 `core/database` / `src/main`
+- **崩溃恢复链加固**：渲染进程崩溃后，游标推送 / 心跳 / 更新广播不再向已销毁的 frame 发消息（`isCrashed` 护栏），日志不再刷屏
+- **应用图标**：Windows 安装包 / 桌面快捷方式与 Linux AppImage 使用专属砚台墨色图标（此前为默认 Electron 图标）
 
 ### P0 启动链稳定化
 
@@ -40,7 +46,7 @@ RC 阶段**冻结**：Soul · Brain · Avatar SDK · Relationship · Memory。�
 - **砚灵本身就是启动过程的一部分**：首帧显示内置「砚」（loading 阶段不空白），后台初始化数据库 / AI / 身体，成功则升级显示、失败则继续用砚
 - 首次启动欢迎动画「✨ 砚灵正在诞生…」（1.4 秒，纯展示不阻塞）
 
-### RC1 新增
+### RC1 新增（0.9.3-rc1，历史）
 
 - **Safe mode 主进程持久化**：safe-mode 标志不再随渲染进程重载丢失（reload 后新渲染进程通过 IPC 恢复安全模式），修复了第二次崩溃后 safe-mode 重载无效的问题
 - **启动结果统计**：`startup.log` 新增 `startup_success` / `startup_recovery` / `startup_failed` 结果标记，无需上报即可在用户机器上统计启动健康度
