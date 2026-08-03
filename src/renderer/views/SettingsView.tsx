@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import type { AvatarDescriptor, SpriteSource } from '../../core/avatar/types'
 import { DEFAULT_BODY_PREFERENCES } from '../../core/avatar/preferences'
 import type { BodyPreferences } from '../../core/avatar/preferences'
 import { qualityStage } from '../../core/avatar/touchQuality'
 import { LIFE_EVENT_ICONS } from '../../core/soul/lifeEventModel'
 import { loadThemePreference, saveThemePreference, type ThemePreference } from '../design/theme'
+import { IconChip, IconChat, IconDatabase, IconGear, IconHeart, IconMinus } from '../components/icons'
 
 interface SettingsViewProps {
   /** 身体库 — UI 只知道"这是一个身体"，不知道格式 */
@@ -21,11 +22,11 @@ interface SettingsViewProps {
 
 type SettingsTab = 'soul' | 'brain' | 'data' | 'system'
 
-const TABS: { id: SettingsTab; icon: string; label: string }[] = [
-  { id: 'soul', icon: '🐾', label: '我的砚灵' },
-  { id: 'brain', icon: '🧠', label: 'AI大脑' },
-  { id: 'data', icon: '💾', label: '数据' },
-  { id: 'system', icon: '⚙️', label: '系统' }
+const TABS: { id: SettingsTab; label: string; icon: ReactNode }[] = [
+  { id: 'soul', icon: <IconHeart />, label: '我的砚灵' },
+  { id: 'brain', icon: <IconChip />, label: 'AI大脑' },
+  { id: 'data', icon: <IconDatabase />, label: '数据' },
+  { id: 'system', icon: <IconGear />, label: '系统' }
 ]
 
 const PROVIDERS = [
@@ -101,6 +102,9 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
   const [soulManifest, setSoulManifest] = useState<{ soulId: string; birthday: string; birthVersion: string; continuityOk: boolean } | null>(null)
   const [moodState, setMoodState] = useState<{ label: string } | null>(null)
   const [diag, setDiag] = useState<any>(null)
+  /** 自定义头像：local:// URL；加载失败（文件被删/损坏）→ 回退首字头像 */
+  const [portrait, setPortrait] = useState<string | null>(null)
+  const [portraitBroken, setPortraitBroken] = useState(false)
 
   useEffect(() => {
     window.inkAPI.getDiagnostics().then(setDiag).catch(() => {})
@@ -113,7 +117,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
     }).catch(() => {})
   }, [])
 
-  // 身体偏好 + 交互质量 + 成长经历 + 灵魂身份 + 当前心境
+  // 身体偏好 + 交互质量 + 成长经历 + 灵魂身份 + 当前心境 + 自定义头像
   useEffect(() => {
     window.inkAPI.getBodyPrefs().then(setBodyPrefs).catch(() => {})
     window.inkAPI.getTouchQuality().then(setTouchQuality).catch(() => {})
@@ -121,6 +125,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
     window.inkAPI.getTodayLifeEvents().then(setLifeToday).catch(() => {})
     window.inkAPI.getSoulManifest().then(setSoulManifest).catch(() => {})
     window.inkAPI.getMoodState().then(setMoodState).catch(() => {})
+    window.inkAPI.getPortrait().then(p => { setPortrait(p); setPortraitBroken(false) }).catch(() => {})
   }, [])
 
   /** 更换大脑迁移仪式：展示"换大脑不换灵魂"的验证过程 */
@@ -492,13 +497,13 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
         ))}
         <div style={{ flex: 1 }} />
         <button className="settings-nav-item" onClick={onBack}>
-          <span className="nav-icon">💬</span>
+          <span className="nav-icon"><IconChat /></span>
           回到聊天
         </button>
       </div>
 
       <div className="settings-content">
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div className="settings-header">
           <div>
             <h3>{TABS.find(t => t.id === tab)?.label}</h3>
             {tab === 'brain' && <div className="settings-subtitle">砚灵的大脑 — 云端与本地模型都在这里</div>}
@@ -507,7 +512,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
             {tab === 'system' && <div className="settings-subtitle">外观与陪伴方式</div>}
           </div>
           <div className="companion-actions" style={{ paddingTop: 4 }}>
-            <button className="title-btn" onClick={onBackToPet} title="回到桌面">&#8722;</button>
+            <button className="title-btn" onClick={onBackToPet} title="回到桌面"><IconMinus size={15} /></button>
           </div>
         </div>
 
@@ -518,7 +523,9 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
             <div className="settings-section">
               <h4>生命状态</h4>
               <div className="soul-card">
-                <div className="soul-avatar">{soulName.slice(0, 1)}</div>
+                {portrait && !portraitBroken
+                  ? <img className="soul-avatar-img clickable" src={portrait} alt={soulName} draggable={false} onError={() => setPortraitBroken(true)} onClick={onBackToPet} title="回到桌宠模式" />
+                  : <div className="soul-avatar clickable" onClick={onBackToPet} title="回到桌宠模式">{soulName.slice(0, 1)}</div>}
                 <div className="soul-lines">
                   <div className="soul-name-line">{soulName}</div>
                   <div className="soul-meta-line">
@@ -535,23 +542,44 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                   { label: '经历', value: lifeEvents.filter((e: any) => e.level === 'major').length > 0 ? `${lifeEvents.filter((e: any) => e.level === 'major').length} 件重要的事` : '刚开始', hint: '成长经历' },
                   { label: '当前心境', value: MOOD_LABELS[moodState?.label ?? 'neutral'], hint: '' }
                 ].map((s) => (
-                  <div key={s.label} style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-small)', padding: '8px 10px' }}>
+                  <div key={s.label} className="stat-cell" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-small)', padding: '8px 10px' }}>
                     <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>{s.label}{s.hint ? ` · ${s.hint}` : ''}</div>
                     <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>{s.value}</div>
                   </div>
                 ))}
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 10 }}>
+              <div className="portrait-row">
+                <div>
+                  <div className="portrait-label">头像</div>
+                  <div className="portrait-hint">它在你心里的样子 —— 不影响身体</div>
+                </div>
+                <div className="portrait-actions">
+                  <button className="settings-sprite-btn" onClick={async () => {
+                    const r = await window.inkAPI.setPortrait()
+                    if (r.success && r.path) { setPortrait(r.path); setPortraitBroken(false) }
+                  }}>
+                    {portrait && !portraitBroken ? '更换' : '选择图片'}
+                  </button>
+                  {portrait && !portraitBroken && (
+                    <button className="settings-sprite-btn" onClick={async () => {
+                      await window.inkAPI.removePortrait()
+                      setPortrait(null)
+                      setPortraitBroken(false)
+                    }}>移除</button>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 10, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                 换身体、换大脑、换电脑，它都还是它——{soulManifest?.soulId ? `灵魂编号 ${soulManifest.soulId}` : '灵魂身份确认中…'}
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 4 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 4, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                 名字不是标签 — 通过对话告诉它，它就会一直用这个名字称呼你。
               </div>
             </div>
 
             <div className="settings-section">
               <h4>性格</h4>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>{personalitySummary()}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{personalitySummary()}</div>
               {personalityLabels.map(([key, label]) => (
                 <div key={key} className="trait-row">
                   <span className="trait-label">{label}</span>
@@ -598,15 +626,15 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                 {bodies.map((b) => (
                   <div key={b.id} className={`provider-card ${b.id === currentBodyId ? 'active' : ''}`} style={{ padding: '12px 14px', cursor: b.id === currentBodyId ? 'default' : 'pointer' }} onClick={() => { if (b.id !== currentBodyId) onChangeBody(b.id) }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                      <div>
+                      <div style={{ minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                         <div style={{ fontWeight: 600, fontSize: 13.5 }}>{b.name}</div>
                         <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
                           {b.metadata?.format ?? b.type} · {b.capabilities.look ? '视线跟随 · ' : ''}{b.capabilities.breath ? '呼吸 · ' : ''}{b.capabilities.sway ? '摆动 · ' : ''}{b.capabilities.blink ? '眨眼 · ' : ''}{b.capabilities.motion ? '动作' : '静态'}
                         </div>
                       </div>
                       {b.id === currentBodyId
-                        ? <span style={{ fontSize: 11.5, color: 'var(--green)', whiteSpace: 'nowrap' }}>当前身体</span>
-                        : <span style={{ fontSize: 11.5, color: 'var(--ink-primary)', whiteSpace: 'nowrap' }}>更换身体 →</span>}
+                        ? <span style={{ fontSize: 11.5, color: 'var(--green)', whiteSpace: 'nowrap', flexShrink: 0 }}>当前身体</span>
+                        : <span style={{ fontSize: 11.5, color: 'var(--ink-primary)', whiteSpace: 'nowrap', flexShrink: 0 }}>更换身体 →</span>}
                     </div>
                   </div>
                 ))}
@@ -705,13 +733,13 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                   <div key={ev.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-small)' }}>
                     <span style={{ fontSize: 15, lineHeight: '20px' }}>{LIFE_EVENT_ICONS[ev.eventType as keyof typeof LIFE_EVENT_ICONS] ?? '⭐'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                         {ev.title}
-                        {ev.level === 'major' && <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 6, border: '1px solid var(--accent-soft, var(--border))', borderRadius: 8, padding: '0 5px' }}>大事件</span>}
+                        {ev.level === 'major' && <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 6, border: '1px solid var(--accent-soft, var(--border))', borderRadius: 8, padding: '0 5px', whiteSpace: 'nowrap' }}>大事件</span>}
                       </div>
-                      {ev.detail && <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 1 }}>{ev.detail}</div>}
+                      {ev.detail && <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 1, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{ev.detail}</div>}
                     </div>
-                    <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', paddingTop: 2 }}>{formatLifeTime(ev.createdAt)}</span>
+                    <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', flexShrink: 0, paddingTop: 2 }}>{formatLifeTime(ev.createdAt)}</span>
                   </div>
                 ))}
               </div>
@@ -730,7 +758,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
               </div>
               {brainProfile && (
                 <div className="soul-card" style={{ alignItems: 'center' }}>
-                  <div className="soul-avatar" style={{ background: 'var(--accent-soft, rgba(102,204,255,0.15))' }}>🧠</div>
+                  <div className="soul-avatar" style={{ background: 'var(--ink-soft)', color: 'var(--ink-primary)' }}><IconChip size={24} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="soul-name-line">{brainProfile.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
@@ -802,11 +830,6 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                       {testState.state === 'testing' ? '测试中...' : '测试连接'}
                     </button>
                   </div>
-                  {testState.state === 'ok' && (
-                    <div style={{ fontSize: 12.5, color: 'var(--green)' }}>
-                      ✓ 连接成功 · 延迟 {testState.latencyMs}ms
-                    </div>
-                  )}
                   {testState.state === 'fail' && (
                     <div style={{ fontSize: 12.5, color: 'var(--red)' }}>✗ {testState.error}</div>
                   )}
@@ -842,7 +865,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                         style={{ width: '100%' }}
                       />
                     </label>
-                    <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                       当前：{tempInput.toFixed(2)} ｜ 模型：{brainProfile.model} ｜ 上下文：{brainProfile.contextK}K
                       {brainProfile.endpoint && ` ｜ 端点：${brainProfile.endpoint}`}
                     </div>
@@ -861,7 +884,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                 background: 'color-mix(in srgb, var(--bg) 78%, transparent)', backdropFilter: 'blur(6px)'
               }}>
                 <div style={{
-                  width: 300, padding: '22px 24px', borderRadius: 'var(--radius-lg)',
+                  width: 300, maxWidth: 'calc(100vw - 40px)', padding: '22px 24px', borderRadius: 'var(--radius-lg)',
                   background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 12px 40px var(--ink-strong)'
                 }}>
                   <div style={{ fontWeight: 700, marginBottom: 12 }}>
@@ -932,11 +955,11 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                     {catalog.map(m => (
                       <div key={m.tag} className="settings-sprite-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
                         <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10 }}>
-                          <span style={{ flex: 1, fontWeight: 500 }}>
+                          <span style={{ flex: 1, minWidth: 0, fontWeight: 500, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                             {m.name} <span style={{ color: 'var(--text-tertiary)' }}>({m.parameterSize})</span>
-                            {m.recommended && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--bg)', background: 'var(--green)', borderRadius: 3, padding: '1px 6px', letterSpacing: 1 }}>推荐</span>}
+                            {m.recommended && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--bg)', background: 'var(--green)', borderRadius: 3, padding: '1px 6px', letterSpacing: 1, whiteSpace: 'nowrap' }}>推荐</span>}
                           </span>
-                          <span className="settings-sprite-status">{m.size}</span>
+                          <span className="settings-sprite-status" style={{ flexShrink: 0 }}>{m.size}</span>
                           {m.installed ? (
                             <button className="settings-sprite-btn" onClick={() => window.inkAPI.useLocalModel(m.tag)}>使用</button>
                           ) : m.feasible ? (
@@ -951,7 +974,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                             <span style={{ fontSize: 11, color: 'var(--ink-primary)' }}>禁止安装</span>
                           )}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                           {m.description} ｜ 需显存 ≥{m.minVramGB}GB / 内存 ≥{m.minRamGB}GB
                         </div>
                         {!m.feasible && (
@@ -1258,8 +1281,8 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                       return items.map((it) => (
                         <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
                           <span style={{ color: it.ok ? 'var(--green)' : 'var(--ink-primary)', fontWeight: 700, width: 16 }}>{it.ok ? '✓' : '✗'}</span>
-                          <span style={{ width: 64, color: 'var(--text-tertiary)' }}>{it.label}</span>
-                          <span>{it.detail}</span>
+                          <span style={{ width: 64, color: 'var(--text-tertiary)', flexShrink: 0 }}>{it.label}</span>
+                          <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{it.detail}</span>
                         </div>
                       ))
                     })()}
@@ -1299,7 +1322,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
             </div>
 
             <div className="about-footer">
-              <div className="ink-logo">🐱</div>
+              <div className="ink-logo">砚</div>
               砚灵 InkSpirit · 你的桌面伙伴<br />
               它会记得你、理解你，陪你慢慢长大
             </div>

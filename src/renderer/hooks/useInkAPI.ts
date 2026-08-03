@@ -76,6 +76,10 @@ declare global {
         Promise<{ success: boolean; prefs: { lookFollow: boolean; sway: boolean; touchFeel: boolean } }>
       getTouchQuality: () => Promise<number>
       addInteraction: (kind: 'touch' | 'comfort' | 'respond' | 'spam') => Promise<number>
+      // 自定义头像 — 它在你心里的样子（与身体无关）
+      getPortrait: () => Promise<string | null>
+      setPortrait: () => Promise<{ success: boolean; path?: string; error?: string }>
+      removePortrait: () => Promise<{ success: boolean }>
 
       // Life Timeline — 成长经历（砚灵日志）
       getLifeEvents: (limit?: number) => Promise<Array<{

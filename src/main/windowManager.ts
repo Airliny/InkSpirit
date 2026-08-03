@@ -15,8 +15,13 @@ import { writeStartupLog, writeStartupError } from './startupLog'
 
 let mainWindow: BrowserWindow | null = null
 let isPetMode = true
-/** Independent pet/panel positions — the pet always returns "home" */
-let modeState: WindowModeState = createWindowModeState(loadSavedPetPosition())
+/**
+ * Independent pet/panel positions — the pet always returns "home".
+ * 模块加载时绝不碰数据库：导入可能发生在单实例锁 / DB 就绪之前，
+ * 损坏的 DB 会让启动在恢复流程开始前就崩溃。真正的位置在
+ * createMainWindow（whenReady 内、DB 就绪后）里再读取。
+ */
+let modeState: WindowModeState = createWindowModeState(null)
 let dragOrigin = {
   winX: 0, winY: 0,
   startMouseX: 0, startMouseY: 0,
@@ -51,6 +56,13 @@ function persistPetPosition(): void {
 export function createMainWindow(): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
 
+  // DB 已就绪（whenReady 内先 openDatabase 再建窗）—— 恢复上次桌宠位置
+  try {
+    modeState = createWindowModeState(loadSavedPetPosition())
+  } catch {
+    // config 不可读（DB 故障）时保持默认位置，绝不阻断建窗
+  }
+
   const initialPos = modeState.petPosition
     ? clampPosition(modeState.petPosition, workAreaAt(modeState.petPosition), PET_SIZE)
     : { x: width - PET_W, y: height - 280 }
@@ -84,6 +96,12 @@ export function createMainWindow(): BrowserWindow {
     const win = mainWindow
     if (win && !win.isDestroyed()) win.show()
   })
+
+  // 无边框窗口的拖拽区双击会触发最大化（Windows/macOS）——面板/桌宠都不该最大化
+  mainWindow.on('maximize', () => {
+    const win = mainWindow
+    if (win && !win.isDestroyed() && win.isMaximized()) win.unmaximize()
+  })
   // Fallback: if the renderer never paints (hung/crashed before first paint),
   // reveal the window anyway so the user is never left with an invisible
   // process. The startup log's missing "06" line pinpoints the failure.
@@ -96,11 +114,17 @@ export function createMainWindow(): BrowserWindow {
     }
   }, 5000)
 
-  mainWindow.setVisibleOnAllWorkspaces(true)
-  mainWindow.setAlwaysOnTop(true, 'floating')
+  // 装饰性/几何调用一律 best-effort —— 内容加载（loadURL/loadFile）绝不能被跳过
+  try { mainWindow.setVisibleOnAllWorkspaces(true) } catch { /* 个别平台不支持 */ }
+  try { mainWindow.setAlwaysOnTop(true, 'floating') } catch { /* no-op */ }
 
   // Pet mode: click-through background, only the pet hitbox intercepts
-  setPetMode()
+  try {
+    setPetMode()
+  } catch (err) {
+    // 几何失败不阻断加载：窗口仍是桌宠尺寸，渲染层兜底仍能显示砚灵
+    writeStartupError(`pet mode init failed: ${err instanceof Error ? err.message : err}`)
+  }
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -122,12 +146,12 @@ export function setPetMode(): void {
   const [x, y] = mainWindow.getPosition()
   const transition = transitionToPet(modeState, { x, y }, workAreaAt({ x, y }))
   modeState = transition.state
-  mainWindow.setPosition(transition.position.x, transition.position.y)
   persistPetPosition()
-
+  // 先缩到桌宠尺寸再移动：避免面板以完整尺寸闪现到桌宠位置
   mainWindow.setSize(PET_W, PET_H)
   mainWindow.setResizable(false)
   mainWindow.setHasShadow(false)
+  mainWindow.setPosition(transition.position.x, transition.position.y)
   mainWindow.setIgnoreMouseEvents(false)
   if (!mainWindow.isDestroyed()) mainWindow.webContents.send('window:mode', 'pet')
   startCursorPush()

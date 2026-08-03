@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { BodyAvatar } from '../avatar/BodyAvatar'
 import { ChatBubble } from '../components/chat/ChatBubble'
 import { ChatInput, type ChatInputHandle } from '../components/chat/ChatInput'
+import { IconGear, IconMinus } from '../components/icons'
 import type { AvatarDescriptor, AnimationState } from '../../core/avatar/types'
 import { captureScroll, restoreScroll, saveChatScroll, getSavedChatScroll, isNearBottom } from '../chatScroll'
 
@@ -103,15 +104,15 @@ export function ChatView({ body, state, messages, isStreaming, modelInfo, lastRo
           <BodyAvatar body={body} state={state} size={44} />
         </div>
         <div className="companion-id">
-          <div className="companion-name" onClick={onBackToPet}>{name}</div>
+          <div className="companion-name">{name}</div>
           <div className="companion-status">
             <span className="companion-status-dot" />
             在线
           </div>
         </div>
         <div className="companion-actions">
-          <button className="title-btn" onClick={onOpenSettings} title="设置">&#9881;</button>
-          <button className="title-btn" onClick={onBackToPet} title="回到桌面">&#8722;</button>
+          <button className="title-btn" onClick={onOpenSettings} title="设置"><IconGear size={15} /></button>
+          <button className="title-btn" onClick={onBackToPet} title="回到桌面"><IconMinus size={15} /></button>
         </div>
       </div>
       <div className="chat-bubbles" ref={bubblesRef}>

@@ -763,6 +763,12 @@ function cleanupOrphanAvatars(): void {
       referencedDirs.add(path.dirname(l2d))
     }
 
+    // 自定义头像：与身体无关，独立引用（不登记会被当作孤儿文件删掉）
+    const portrait = getConfig('pet_portrait')
+    if (portrait && portrait.startsWith('local://')) {
+      referencedFiles.add(path.normalize(decodeURIComponent(portrait.slice('local://'.length))))
+    }
+
     for (const entry of fs.readdirSync(avatarsDir)) {
       const full = path.join(avatarsDir, entry)
       let isDir = false

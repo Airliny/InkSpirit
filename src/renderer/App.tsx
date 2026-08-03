@@ -253,7 +253,11 @@ export default function App() {
 
   const handlePetClick = useCallback(() => { window.inkAPI.setPanelMode(); setPanel('chat') }, [])
   const handlePetContextMenu = useCallback((e: React.MouseEvent) => { e.preventDefault(); window.inkAPI.showPetMenu() }, [])
-  const handleBackToPet = useCallback(() => { window.inkAPI.setPetMode() }, [])
+  const handleBackToPet = useCallback(() => {
+    // 先切透明桌宠视图（下一帧才动窗口），否则面板会以完整尺寸闪现到桌宠位置
+    setMode('pet')
+    requestAnimationFrame(() => { window.inkAPI.setPetMode() })
+  }, [])
 
   const handleSend = useCallback(async (message: string) => {
     addUserMessage(message); setExpression('happy')
@@ -284,7 +288,10 @@ export default function App() {
 
   const handleWizardComplete = useCallback(async () => {
     await refreshBodies()
-    setScreen('desktop'); window.inkAPI.setPetMode()
+    // 先切透明桌宠视图（下一帧才动窗口），避免向导面板闪现到桌宠位置
+    setScreen('desktop')
+    setMode('pet')
+    requestAnimationFrame(() => { window.inkAPI.setPetMode() })
     // 砚灵诞生：首次见面向导完成后 1.4s 欢迎动画（纯展示，不阻塞任何初始化）
     setBirth(true)
     if (birthTimer.current) clearTimeout(birthTimer.current)
@@ -319,7 +326,7 @@ export default function App() {
         </div>
       }>
         <PetView body={body} expression={expression} mood={mood} activity={activity} temperament={temperament ?? undefined} onClick={handlePetClick} onContextMenu={handlePetContextMenu} />
-        {birth && <div className="pet-birth">✨ 砚灵正在诞生…</div>}
+        {birth && <div className="pet-birth">砚灵正在诞生…</div>}
       </ErrorBoundary>
     )
   }

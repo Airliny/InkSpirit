@@ -56,6 +56,9 @@ const api = {
     ipcRenderer.invoke('avatar:setPrefs', prefs),
   getTouchQuality: () => ipcRenderer.invoke('avatar:getTouchQuality'),
   addInteraction: (kind: 'touch' | 'comfort' | 'respond' | 'spam') => ipcRenderer.invoke('avatar:addInteraction', kind),
+  getPortrait: () => ipcRenderer.invoke('avatar:getPortrait'),
+  setPortrait: () => ipcRenderer.invoke('avatar:setPortrait'),
+  removePortrait: () => ipcRenderer.invoke('avatar:removePortrait'),
   onPetWorld: (cb: (data: { fatigue: number; hourContext: string; sleepLate: boolean; busyDeviation: number; quietDeviation: number; streakMin: number; userPresent: boolean }) => void) => {
     const h = (_e: Electron.IpcRendererEvent, d: { fatigue: number; hourContext: string; sleepLate: boolean; busyDeviation: number; quietDeviation: number; streakMin: number; userPresent: boolean }) => cb(d)
     ipcRenderer.on('pet:world', h)

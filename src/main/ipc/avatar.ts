@@ -18,6 +18,57 @@ import { logTo } from '../logs'
 
 const SPRITE_KEYS = ['idle', 'walk', 'sleep', 'sit', 'stretch', 'yawn', 'surprised', 'happy', 'sad', 'love']
 
+const PORTRAIT_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp']
+const MAX_PORTRAIT_BYTES = 20 * 1024 * 1024
+
+function portraitUrlFrom(filePath: string): string {
+  return `local://${encodeURIComponent(filePath)}`
+}
+
+/**
+ * 自定义头像：返回 local:// URL（旧 file:// 引用自动迁移）。
+ * 文件丢失（被删/移动/备份恢复后缺失）→ 清理配置，回到默认首字头像。
+ */
+function readPortrait(): string | null {
+  let raw = getConfig('pet_portrait')
+  if (!raw) return null
+  if (raw.startsWith('file://')) {
+    const filePath = path.normalize(raw.replace(/^file:\/\/\/?/, ''))
+    raw = portraitUrlFrom(filePath)
+    setConfig('pet_portrait', raw)
+  }
+  if (!raw.startsWith('local://')) {
+    setConfig('pet_portrait', '')
+    return null
+  }
+  try {
+    const filePath = decodeURIComponent(raw.slice('local://'.length))
+    if (!fs.existsSync(filePath)) {
+      setConfig('pet_portrait', '')
+      return null
+    }
+    return raw
+  } catch {
+    setConfig('pet_portrait', '')
+    return null
+  }
+}
+
+/** 重新导入不累积旧头像文件 */
+function removeOldPortraitFiles(): void {
+  try {
+    const avatarsDir = path.join(app.getPath('userData'), 'avatars')
+    if (!fs.existsSync(avatarsDir)) return
+    for (const entry of fs.readdirSync(avatarsDir)) {
+      if (entry.startsWith('portrait_')) {
+        fs.rmSync(path.join(avatarsDir, entry), { force: true })
+      }
+    }
+  } catch {
+    // cleanup is best-effort
+  }
+}
+
 function getSpriteSource(): SpriteSource {
   const sprites: SpriteSource = {}
   for (const k of SPRITE_KEYS) {
@@ -121,5 +172,53 @@ export function registerAvatarHandlers(): void {
     const next = applyInteraction(current, kind)
     setConfig('body_touch_quality', String(next))
     return next
+  })
+
+  // 自定义头像 — 它在你心里的样子（与身体无关，随备份走）
+  ipcMain.handle('avatar:getPortrait', () => readPortrait())
+
+  ipcMain.handle('avatar:setPortrait', async () => {
+    const win = getMainWindow()
+    const result = await dialog.showOpenDialog(win as BrowserWindow, {
+      title: '选择头像图片',
+      filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }],
+      properties: ['openFile']
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: 'Cancelled' }
+    }
+
+    const srcPath = result.filePaths[0]
+    const ext = path.extname(srcPath).toLowerCase()
+    if (!PORTRAIT_EXTENSIONS.includes(ext)) {
+      return { success: false, error: '请选择 PNG / JPG / GIF / WebP 图片' }
+    }
+    try {
+      if (fs.statSync(srcPath).size > MAX_PORTRAIT_BYTES) {
+        return { success: false, error: '图片太大了（超过 20MB），换一张小一点的吧' }
+      }
+    } catch {
+      return { success: false, error: '无法读取所选图片' }
+    }
+
+    const avatarsDir = path.join(app.getPath('userData'), 'avatars')
+    if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true })
+    removeOldPortraitFiles()
+    const destPath = path.join(avatarsDir, `portrait_${Date.now()}${ext}`)
+    try {
+      fs.copyFileSync(srcPath, destPath)
+    } catch (err) {
+      logTo('avatar', `portrait copy failed: ${err instanceof Error ? err.message : err}`)
+      return { success: false, error: '图片复制失败，请检查权限' }
+    }
+    const url = portraitUrlFrom(destPath)
+    setConfig('pet_portrait', url)
+    return { success: true, path: url }
+  })
+
+  ipcMain.handle('avatar:removePortrait', () => {
+    removeOldPortraitFiles()
+    setConfig('pet_portrait', '')
+    return { success: true }
   })
 }
