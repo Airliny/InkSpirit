@@ -11,7 +11,7 @@ import {
   type WorkArea
 } from '../core/windowState'
 import { getConfig, setConfig } from '../core/config'
-import { writeStartupLog } from './startupLog'
+import { writeStartupLog, writeStartupError } from './startupLog'
 
 let mainWindow: BrowserWindow | null = null
 let isPetMode = true
@@ -91,16 +91,10 @@ export function createMainWindow(): BrowserWindow {
     writeStartupLog('06 ready-to-show fallback timer fired')
     const win = mainWindow
     if (win && !win.isDestroyed() && !win.isVisible()) {
-      writeStartupLog('06 WARNING: showing window without ready-to-show — renderer never painted')
+      writeStartupError('06 window shown without ready-to-show — renderer never painted')
       win.show()
     }
-  }, 10000)
-  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
-    writeStartupLog(`08 did-fail-load code=${code} desc=${desc} url=${url}`)
-  })
-  mainWindow.webContents.on('did-finish-load', () => {
-    writeStartupLog('07 did-finish-load')
-  })
+  }, 5000)
 
   mainWindow.setVisibleOnAllWorkspaces(true)
   mainWindow.setAlwaysOnTop(true, 'floating')

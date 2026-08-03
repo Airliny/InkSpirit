@@ -1,5 +1,5 @@
 import { app, BrowserWindow, protocol, net, powerMonitor, screen, dialog } from 'electron'
-import { createMainWindow, getMainWindow } from './windowManager'
+import { createMainWindow, getMainWindow, setPanelMode } from './windowManager'
 import { createTray } from './trayManager'
 import { registerIpcHandlers } from './ipc/index'
 import { openDatabase, getDatabase, recoverDatabase, closeDatabase, type DatabaseState } from '../core/database'
@@ -30,8 +30,10 @@ import { pathToFileURL } from 'url'
 import { migrateToSecure } from '../core/secureStore'
 import { preloadConfig, getConfig, setConfig } from '../core/config'
 import { uuidv4 } from '../core/utils'
-import { writeStartupLog } from './startupLog'
-import { logTo } from './logs'
+import { writeStartupLog, writeStartupError } from './startupLog'
+import { logTo, logsDirectory } from './logs'
+import { decideRendererCrashAction, EMPTY_CRASH_STATE } from '../core/rendererCrashPolicy'
+import { enterSafeMode } from './safeMode'
 import fs from 'fs'
 import path from 'path'
 
@@ -43,10 +45,15 @@ let currentScene: ForegroundScene = 'work'
 let behaviorBudget: BudgetState = createBudget(3)
 /** Presence Budget：身体行为的每日稀缺（注视/散步/注意） */
 let presenceBudgetState: PresenceBudgetState = emptyPresenceBudget(dateKeyOf(Date.now()))
-/** 渲染进程崩溃自动重载的防循环护栏 */
-let rendererReloadCount = 0
-let lastRendererReloadAt = 0
+/** 渲染进程崩溃恢复：第 1 次 reload → 第 2 次 safe mode → 第 3 次修复提示 */
+let rendererCrashState = EMPTY_CRASH_STATE
 const RENDERER_RELOAD_GUARD_MS = 2 * 60 * 1000
+/** 重载完成后要导航的页面（修复对话框「打开诊断页」用） */
+let pendingNavigateAfterLoad: string | null = null
+/** 渲染进程不响应（unresponsive）计时器 */
+let unresponsiveTimer: ReturnType<typeof setTimeout> | null = null
+/** startup_success 只记一次（崩溃重载不重复统计） */
+let startupSuccessLogged = false
 let userReturnedAfterMs = 0
 let userReturnedAt = 0
 let lastRecallMemory: import('../core/soul/memory').Memory | null = null
@@ -78,7 +85,7 @@ if (!app.requestSingleInstanceLock()) {
  * "宁可降级，也不能退出" — at minimum the user sees a window with an action.
  */
 async function handleStartupDbFailure(state: DatabaseState): Promise<void> {
-  writeStartupLog(`startup DB failure: ${state.lastError}`)
+  writeStartupLog(`startup_recovery database corrupted: ${state.lastError}`)
   const { response } = await dialog.showMessageBox({
     type: 'error',
     title: '砚灵无法启动',
@@ -97,7 +104,7 @@ async function handleStartupDbFailure(state: DatabaseState): Promise<void> {
       return
     }
     // Recovered DB still failing — surface the error once more, then quit
-    writeStartupLog(`recovery failed: ${recovered.lastError}`)
+    writeStartupLog(`startup_failed recovery failed: ${recovered.lastError}`)
     await dialog.showMessageBox({
       type: 'error',
       title: '修复失败',
@@ -108,6 +115,68 @@ async function handleStartupDbFailure(state: DatabaseState): Promise<void> {
     })
   }
   app.exit(0)
+}
+
+// ---- Renderer crash recovery: reload → safe mode → repair dialog ----
+// 绝不静默：第 1 次崩溃自动重载；第 2 次进入 safe mode（强制内置砚灵）重载；
+// 第 3 次停止自动恢复，弹修复提示（打开诊断页 / 重启 / 退出）。
+
+function reloadRenderer(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  setTimeout(() => {
+    if (!win.isDestroyed()) win.webContents.reload()
+  }, 800)
+}
+
+function escalateRendererCrash(win: BrowserWindow, reason: string): void {
+  const { action, nextState } = decideRendererCrashAction(rendererCrashState, Date.now(), RENDERER_RELOAD_GUARD_MS)
+  rendererCrashState = nextState
+
+  if (action === 'reload') {
+    logTo('renderer', `reloading renderer (1) — ${reason}`)
+    writeStartupLog(`renderer crash (${reason}) — reload #1`)
+    reloadRenderer(win)
+    return
+  }
+  if (action === 'safe-mode-reload') {
+    // Safe mode：让渲染层只渲染内置「砚」，不加载 Live2D/VRM/three.js 重资产。
+    // 标志持久在主进程 —— reload 后新渲染进程通过 system:getSafeMode 查询恢复。
+    logTo('renderer', `reloading renderer (2) — ${reason}, entering safe mode`)
+    writeStartupLog(`renderer crash twice (${reason}) — entering safe mode`)
+    enterSafeMode()
+    if (!win.isDestroyed()) win.webContents.send('app:safeMode')
+    reloadRenderer(win)
+    return
+  }
+  // 第 3 次：停止自动恢复，给出修复路径（绝不静默放弃）
+  writeStartupError(`renderer crash loop (${reason}) — showing repair dialog`)
+  showRendererRepairDialog(win)
+}
+
+async function showRendererRepairDialog(win: BrowserWindow | null): Promise<void> {
+  const { response } = await dialog.showMessageBox({
+    type: 'error',
+    title: '砚灵遇到了反复崩溃',
+    message: '砚灵反复崩溃，自动恢复没有成功。',
+    detail: `可以打开诊断页查看日志，或者重启应用。\n\n日志目录：${logsDirectory()}`,
+    buttons: ['打开诊断页', '重启应用', '退出'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  })
+  if (response === 0) {
+    // 打开诊断页：切到面板 + 重载成功后导航（重载完再 send，避免丢消息）
+    setPanelMode()
+    pendingNavigateAfterLoad = 'settings'
+    if (win && !win.isDestroyed()) reloadRenderer(win)
+    return
+  }
+  if (response === 1) {
+    app.relaunch()
+    app.exit(0)
+    return
+  }
+  app.quit()
 }
 
 app.whenReady().then(() => {
@@ -153,7 +222,7 @@ app.whenReady().then(() => {
     // Brain config corrupted (e.g. broken personalities JSON) — recover
     // rather than fail the whole app: clear soul-affecting rows and restart
     logTo('brain', `Agent init failed: ${err instanceof Error ? err.message : err}`)
-    writeStartupLog(`Agent init failed: ${err instanceof Error ? err.message : err}`)
+    writeStartupLog(`startup_recovery agent init failed: ${err instanceof Error ? err.message : err}`)
     try {
       const db = getDatabase()
       db.prepare('DELETE FROM personalities').run()
@@ -180,24 +249,45 @@ app.whenReady().then(() => {
   writeStartupLog('05 window created')
   win.webContents.on('render-process-gone', (_e, details) => {
     logTo('renderer', `render-process-gone: ${details.reason} (${details.exitCode})`)
-    // 渲染进程崩溃 → 白屏是桌宠最坏的失败方式：自动重载恢复（防无限循环）
-    if (details.reason !== 'clean-exit') {
-      const now = Date.now()
-      if (now - lastRendererReloadAt > RENDERER_RELOAD_GUARD_MS) rendererReloadCount = 0
-      rendererReloadCount++
-      lastRendererReloadAt = now
-      if (rendererReloadCount <= 3 && !win.isDestroyed()) {
-        logTo('renderer', `reloading renderer (attempt ${rendererReloadCount})`)
-        setTimeout(() => {
-          if (!win.isDestroyed()) win.webContents.reload()
-        }, 800)
-      } else {
-        logTo('renderer', 'renderer crash loop — giving up auto-reload')
-      }
+    if (details.reason === 'clean-exit') return
+    escalateRendererCrash(win, `render-process-gone:${details.reason}`)
+  })
+  win.webContents.on('unresponsive', () => {
+    logTo('renderer', 'unresponsive — 30s window before escalation')
+    const t = setTimeout(() => {
+      logTo('renderer', 'unresponsive persisted — escalating')
+      escalateRendererCrash(win, 'unresponsive')
+    }, 30000)
+    unresponsiveTimer = t
+  })
+  win.webContents.on('responsive', () => {
+    if (unresponsiveTimer) {
+      clearTimeout(unresponsiveTimer)
+      unresponsiveTimer = null
     }
   })
   win.webContents.on('console-message', (_e, level, message) => {
     if (level >= 3) logTo('renderer', `renderer[${level}]: ${message}`)
+  })
+  // 主页面加载失败：升级恢复链（重载 1 次 → safe mode → 修复提示），绝不静默。
+  // 恢复链进入 repair-dialog 后不再因加载失败重弹对话框（避免坏安装时的对话框风暴）。
+  win.webContents.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
+    writeStartupLog(`08 did-fail-load code=${code} desc=${desc} url=${url}`)
+    if (isMainFrame && rendererCrashState.count < 2) {
+      escalateRendererCrash(win, `did-fail-load:${code}`)
+    }
+  })
+  win.webContents.on('did-finish-load', () => {
+    writeStartupLog('07 did-finish-load')
+    if (!startupSuccessLogged) {
+      startupSuccessLogged = true
+      writeStartupLog('startup_success')
+    }
+    if (pendingNavigateAfterLoad) {
+      const page = pendingNavigateAfterLoad
+      pendingNavigateAfterLoad = null
+      win.webContents.send('navigate', page)
+    }
   })
   createTray(win)
   startPerception()

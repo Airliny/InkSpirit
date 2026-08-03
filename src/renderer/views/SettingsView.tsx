@@ -15,6 +15,8 @@ interface SettingsViewProps {
   onRefreshBodies: () => Promise<void>
   onBack: () => void
   onBackToPet: () => void
+  /** 安全模式（渲染进程反复崩溃后自动进入：只渲染内置「砚」） */
+  safeMode?: boolean
 }
 
 type SettingsTab = 'soul' | 'brain' | 'data' | 'system'
@@ -44,7 +46,7 @@ const MOOD_LABELS: Record<string, string> = {
   low: '情绪不高', neutral: '平静'
 }
 
-export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBodies, onBack, onBackToPet }: SettingsViewProps) {
+export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBodies, onBack, onBackToPet, safeMode = false }: SettingsViewProps) {
   const [tab, setTab] = useState<SettingsTab>('soul')
   const [provider, setProvider] = useState('openai')
   const [apiKey, setApiKey] = useState('')
@@ -1102,6 +1104,23 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
         {tab === 'system' && (
           <>
             <div className="settings-section">
+              <h4>运行状态</h4>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-small)', padding: '10px 12px' }}>
+                <span style={{ fontSize: 15 }}>{safeMode ? '🛡️' : '✅'}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                    {safeMode ? '安全模式' : '正常模式'}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2, lineHeight: 1.6 }}>
+                    {safeMode
+                      ? '砚灵遇到了反复崩溃，已自动进入安全模式保护自己（只显示内置身体）。重启应用可恢复正常模式。'
+                      : '如果身体或插件异常，砚灵会自动进入安全模式保护自己。'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-section">
               <h4>外观</h4>
               <div className="segmented">
                 <button className={theme === 'light' ? 'active' : ''} onClick={() => changeTheme('light')}>浅色</button>
@@ -1229,6 +1248,7 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                       const items = [
                         { label: '应用版本', ok: true, detail: `InkSpirit v${diag.version}（${diag.platform} ${diag.arch} · Electron ${diag.electron}）` },
                         { label: '灵魂系统', ok: !!diag.soul?.soulId, detail: diag.soul?.soulId ? `灵魂编号 ${diag.soul.soulId}` : '尚未生成' },
+                        { label: '灵魂连续性', ok: !!diag.soul?.continuityOk, detail: diag.soul?.continuityOk ? '正常（身份/人格/关系/记忆完整）' : '指纹不可计算（数据库可能异常）' },
                         { label: '数据库', ok: diag.db?.status === 'healthy', detail: diag.db?.status === 'healthy' ? '健康' : `异常：${diag.db?.lastError ?? '未知'}` },
                         { label: '大脑连接', ok: diag.brain?.provider === 'ollama' || !!diag.brain?.configured, detail: diag.brain?.provider === 'ollama' ? '本地大脑（Ollama）' : `${diag.brain?.provider} ${diag.brain?.model ?? '未配置模型'}${diag.brain?.configured ? ' · 已配置' : ' · 未配置'}` },
                         { label: '身体引擎', ok: true, detail: `当前身体 ${diag.body?.currentBodyId ?? '内置'}（${diag.body?.modelType}）` },
@@ -1247,16 +1267,29 @@ export function SettingsView({ bodies, currentBodyId, onChangeBody, onRefreshBod
                   <div className="info-note" style={{ marginTop: 10, wordBreak: 'break-all' }}>
                     日志目录：{diag.logsDir}
                   </div>
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                     <button
                       className="settings-sprite-btn"
                       style={{ fontSize: 12 }}
                       onClick={async () => {
                         await window.inkAPI.setConfig('last_diag_copy', diag.logsDir)
-                        try { await navigator.clipboard.writeText(`InkSpirit v${diag.version} | 日志目录：${diag.logsDir}`) } catch { /* clipboard unavailable */ }
+                        const gpuInfo = diag.gpu as Record<string, string>
+                        const report = [
+                          `InkSpirit 诊断报告 v${diag.version}`,
+                          `平台：${diag.platform} ${diag.arch} · Electron ${diag.electron} · 运行 ${Math.round(diag.uptimeSec / 60)} 分钟`,
+                          `灵魂：${diag.soul?.soulId ?? '未生成'}${diag.soul?.continuityOk ? '（连续性正常）' : '（连续性异常）'}`,
+                          `数据库：${diag.db?.status}${diag.db?.status !== 'healthy' ? `（${diag.db?.lastError ?? ''}）` : ''}`,
+                          `大脑：${diag.brain?.provider} ${diag.brain?.model ?? ''}${diag.brain?.configured ? '（已配置）' : '（未配置）'}`,
+                          `身体：${diag.body?.currentBodyId ?? '内置'}（${diag.body?.modelType}）`,
+                          `GPU：WebGL ${gpuInfo['webgl'] ?? '?'}`,
+                          `更新服务：${diag.updater?.enabled ? '已启用' : '未启用'}`,
+                          `日志目录：${diag.logsDir}`,
+                          ''
+                        ].join('\n')
+                        try { await navigator.clipboard.writeText(report) } catch { /* clipboard unavailable */ }
                       }}
                     >
-                      复制日志目录
+                      导出诊断报告
                     </button>
                   </div>
                 </>

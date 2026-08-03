@@ -173,7 +173,14 @@ const api = {
     const h = (_e: Electron.IpcRendererEvent, p: string) => cb(p)
     ipcRenderer.on('navigate', h)
     return () => ipcRenderer.removeListener('navigate', h)
-  }
+  },
+  // Safe mode（渲染进程第二次崩溃后主进程触发）：只渲染内置「砚」
+  onSafeMode: (cb: () => void) => {
+    const h = () => cb()
+    ipcRenderer.on('app:safeMode', h)
+    return () => ipcRenderer.removeListener('app:safeMode', h)
+  },
+  getSafeMode: () => ipcRenderer.invoke('system:getSafeMode') as Promise<boolean>
 }
 
 contextBridge.exposeInMainWorld('inkAPI', api)

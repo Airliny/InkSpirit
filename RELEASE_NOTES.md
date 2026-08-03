@@ -1,3 +1,71 @@
+## InkSpirit v0.9.3-rc1 — First Stability Release Candidate
+
+**稳定性修复版（Release Candidate）。** 这一版不是预览功能版——v0.9.3 的目标只有一个：
+
+> 任何用户下载安装后，第一次启动都必须看到砚灵，并且所有失败都有可恢复路径。
+
+v0.9.3 focuses on reliability. InkSpirit now guarantees:
+
+- The companion appears on first launch
+- Avatar failures fallback safely
+- Renderer crashes recover automatically
+- Settings remain available independently
+- Soul data stays protected
+
+RC 阶段**冻结**：Soul · Brain · Avatar SDK · Relationship · Memory。不改结构，只验收真实用户环境（Windows 10 办公机 / Windows 11 多显示器 / DPI 缩放 / 睡眠唤醒）。
+
+### P0 启动链稳定化
+
+- **启动阶段可观测**：`logs/startup.log` 记录完整检查点（app ready → database → agent → ipc → window → renderer），失败一律以 `[ERROR]` 标记，从用户机器上即可定位「任务栏有图标但无窗口」的卡点，无需调试器
+- **avatar 回退可见**：身体初始化失败（Live2D/VRM/Sprite/模型损坏/资源缺失）→ 记录 `[ERROR] avatar initialization failed fallback=builtin`
+- **窗口保护**：`ready-to-show` 才显示窗口；**5 秒**内没有首帧直接 `show()`——main 活着、窗口隐藏、用户以为没启动的情况不再出现
+- **渲染进程崩溃恢复升级链**：第 1 次崩溃自动 `reload()`；第 2 次进入 **safe mode**（只渲染内置砚灵，不加载 Live2D/VRM/three.js 重资产）后重载；第 3 次弹修复提示（打开诊断页 / 重启 / 退出）。`did-fail-load`（主页面加载失败）与 `unresponsive`（进程不响应 30 秒）同样走这条恢复链
+
+### P0 永远显示默认砚灵
+
+- 核心规则：任何情况下（Live2D 失败 / VRM 失败 / Sprite 失败 / 模型损坏 / 资源缺失 / IPC 挂死 / 身体列表为空）→ 最终显示内置「砚」，绝不 `avatar=null`、绝不空窗口
+- 渲染层新增 `BUILTIN_BODY_DESCRIPTOR`：无需 IPC、纯客户端即可构造的最后退路
+- 桌宠视图 / 聊天面板分别用 ErrorBoundary 隔离——一个视图崩溃不会白屏整个窗口
+- BodyAvatar 渲染抛错（含适配器内部异常）→ try/catch 捕获 → 回退内置「砚」，异常绝不冒泡到 UI
+
+### P1 设置窗口隔离
+
+- 设置只依赖 Settings UI → IPC → Database，不依赖 Avatar Engine（Live2D / VRM / three.js）
+- 即使桌宠坏掉，用户仍然能进设置修复
+
+### P1 首次启动流程优化
+
+- 新流程：检查新用户向导 → **加载默认身体 → 立即显示砚灵** → 后台初始化 AI（历史对话 / 模型信息 / 名字）
+- 不再「初始化所有东西成功后才显示」——任何一步失败（含 IPC 挂死）都按失败处理，4 秒超时护栏，绝不黑屏
+- **砚灵本身就是启动过程的一部分**：首帧显示内置「砚」（loading 阶段不空白），后台初始化数据库 / AI / 身体，成功则升级显示、失败则继续用砚
+- 首次启动欢迎动画「✨ 砚灵正在诞生…」（1.4 秒，纯展示不阻塞）
+
+### RC1 新增
+
+- **Safe mode 主进程持久化**：safe-mode 标志不再随渲染进程重载丢失（reload 后新渲染进程通过 IPC 恢复安全模式），修复了第二次崩溃后 safe-mode 重载无效的问题
+- **启动结果统计**：`startup.log` 新增 `startup_success` / `startup_recovery` / `startup_failed` 结果标记，无需上报即可在用户机器上统计启动健康度
+- **设置页运行状态**：系统 → 运行状态（正常模式 ✅ / 安全模式 🛡️ + 说明），符合「身体或插件异常时砚灵自动进入安全模式保护自己」的产品理念
+- **日志隐私脱敏**：所有日志落盘前统一 `sanitizeLog()`（API Key / token / Bearer / 用户目录路径自动过滤），9 类脱敏用例自动化测试锁定
+- **诊断页升级**：新增灵魂连续性状态（身份/人格/关系/记忆指纹可计算性）；「导出诊断报告」一键复制完整报告（版本/平台/运行时长/灵魂/数据库/大脑/身体/GPU/日志目录）——GitHub issue 反馈直接粘贴
+- **AI 失败话术**：IPC 异常兜底改为「砚灵暂时联系不上它的大脑。你可以检查一下 AI 设置。」（Key 错误/断网原本就有人话提示 + 云端失败自动降级本地）
+
+### P1 Avatar 安全加载
+
+- 统一契约：`loadAvatar()` 只返回 `{ success: true, avatar }` 或 `{ success: false, fallback: "builtin" }`，禁止异常冒泡到 UI
+
+### 验收标准（发布前必须测试）
+
+| 场景 | 预期 |
+| --- | --- |
+| Windows 新用户安装 / 无配置文件 / 无 API Key / 无模型文件 / 无网络 | ✅ 桌面出现砚灵 |
+| 删除 avatar 文件 / 数据库部分损坏 / API 失效 / Live2D 资源缺失 | ✅ 自动恢复，有提示，不白屏 |
+| Tray → 设置 / 桌宠右键 → 设置 / 设置关闭 → 返回桌宠 | ✅ 窗口出现，桌宠位置恢复，对话滚到底部 |
+
+### 测试
+
+- 新增：崩溃恢复升级链（reload → safe mode → 修复提示）策略测试、首次启动「先显示后初始化」流程测试、内置身体描述符恒可用测试
+- 全量单元测试通过
+
 ## InkSpirit 0.9.2 Preview
 
 **Stability & Experience Fix.** 不新增核心能力，只修复影响第一次体验的问题。

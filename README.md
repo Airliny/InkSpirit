@@ -4,6 +4,8 @@
 
 > **本地优先的数字生命框架 · Persistent AI Companion Framework**
 >
+> Stable desktop release with automatic recovery and safe fallback — 首次启动必有砚灵，一切失败皆有恢复路径。
+>
 > InkSpirit is a local-first digital life framework that allows an AI companion to persist, evolve, and inhabit different bodies across models and devices.
 >
 > 砚灵是一个本地优先的数字生命框架，让 AI 伙伴能够跨模型、跨身体、跨设备持续存在，并随着互动不断成长。
@@ -170,6 +172,7 @@ src/
 
 ## 更新记录
 
+- **v0.9.3-rc1** — First Stability Release Candidate（稳定性修复版）：目标「任何用户安装后第一次启动必须看到砚灵，所有失败都有可恢复路径」。启动链稳定化（`[ERROR]` 标记的 `logs/startup.log` 检查点 + `startup_success/recovery/failed` 结果统计、窗口 5 秒首帧兜底显示、渲染崩溃恢复升级链 reload → safe mode（主进程持久化）→ 修复提示、`did-fail-load`/`unresponsive` 接入同一恢复链）、永远显示默认砚灵（首帧即砚灵、内置身体描述符纯客户端兜底、桌宠/聊天视图 ErrorBoundary 隔离、BodyAvatar 渲染异常捕获回退）、设置与 Avatar Engine 隔离 + 设置页运行状态展示、首次启动先显示砚灵再后台初始化 AI（4 秒超时护栏）+「砚灵正在诞生…」欢迎动画
 - **v0.9.2-preview** — Stability & Experience Fix（稳定性，不新增能力）：首次启动稳定性（启动检查点日志 `logs/startup.log`、窗口等首帧再显示、`did-fail-load`/渲染崩溃记录、IPC 提前注册消除竞态）、修复 Live2D 共享 Pixi 单例 bug（聊天面板多实例重叠/空白 → 每实例独立渲染）、VRM 加载超时保护、分类日志系统（`logs/{startup,renderer,avatar,brain,updater}.log`，不落盘聊天/密钥）、设置 → 系统 → 诊断页（版本/灵魂/数据库/大脑/身体/GPU/更新 一键状态）、回归测试 +9（首启回退链/精灵图 URL 回退）
 - **v0.9.1-preview** — 稳定性预览版（v1.0 前 RC）：单实例锁、渲染进程崩溃自动重载、记忆纠正（"记错了"的记忆被真正削弱）、修复向导"让你"笔误与命名原则违规；完整审计清单见 docs/RELEASE_AUDIT.md
 - **v1.0.0** — Identity Release（数字生命完整体验）：定位升级（开源数字生命框架 · Soul/Brain/Body 解耦）、首次启动重构（你好我是砚灵→身体可选→大脑以后再定，先建立关系）、生命状态主页（诞生/认识天数/大事件/当前心境）

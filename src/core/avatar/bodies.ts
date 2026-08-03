@@ -36,17 +36,18 @@ export function bodySwitchConfigKeys(): string[] {
   return ['current_avatar_id', 'model_type']
 }
 
+/** 内置身体 —— 任何情况下都不允许消失的最后退路（渲染层无需 IPC 即可构造） */
+export const BUILTIN_BODY_DESCRIPTOR: AvatarDescriptor = {
+  id: BUILTIN_BODY_ID,
+  name: '默认砚灵',
+  type: 'builtin',
+  source: { kind: 'builtin' },
+  capabilities: BUILTIN_CAPABILITIES,
+  metadata: { format: '内置', note: '任何时候都不会消失的身体' }
+}
+
 export function buildBodyDescriptors(sprites: SpriteSource, live2dPath: string | null, vrmPath: string | null): AvatarDescriptor[] {
-  const bodies: AvatarDescriptor[] = [
-    {
-      id: BUILTIN_BODY_ID,
-      name: '默认砚灵',
-      type: 'builtin',
-      source: { kind: 'builtin' },
-      capabilities: BUILTIN_CAPABILITIES,
-      metadata: { format: '内置', note: '任何时候都不会消失的身体' }
-    }
-  ]
+  const bodies: AvatarDescriptor[] = [BUILTIN_BODY_DESCRIPTOR]
 
   const hasSprite = Object.values(sprites).some(Boolean)
   if (hasSprite) {

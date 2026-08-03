@@ -9,6 +9,8 @@ import type { AvatarDescriptor, BodyModifiers } from '../core/avatar/types'
 import type { AvatarExpression } from './stores/avatarStore'
 import { computeTemperament } from '../core/avatar/expressionLayer'
 import { registerDefaultAdapters } from './avatar/adapters'
+import { BUILTIN_BODY_DESCRIPTOR } from '../core/avatar/bodies'
+import { BuiltinFace } from './avatar/adapters/builtinAdapter'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import {
   reduceActivity,
@@ -27,11 +29,25 @@ type Panel = 'chat' | 'settings' | null
 // 身体适配器注册一次（新增格式在这里加一行）
 registerDefaultAdapters()
 
+/** IPC 超时护栏：调用挂死（主进程不响应）时按失败处理，绝不把用户锁在黑屏 */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(null), ms)
+    p.then((v) => { clearTimeout(t); resolve(v) })
+      .catch(() => { clearTimeout(t); resolve(null) })
+  })
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('desktop')
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'pet' | 'panel'>('pet')
   const [panel, setPanel] = useState<Panel>(null)
+  /** 渲染进程第二次崩溃后主进程强制进入的 safe mode：只渲染内置「砚」 */
+  const [safeMode, setSafeMode] = useState(false)
+  /** 首次启动欢迎动画：砚灵正在诞生…（纯展示，绝不阻塞） */
+  const [birth, setBirth] = useState(false)
+  const birthTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const {
     messages, isStreaming, addUserMessage, appendAssistantChunk, finishAssistantMessage, setMessages
   } = useChatStore()
@@ -92,17 +108,17 @@ export default function App() {
     setActivity((prev) => reduceActivity(prev, event))
   }, [])
 
-  /** 刷新身体库 + 恢复当前身体（换身体不换灵魂） */
+  /** 刷新身体库 + 恢复当前身体（换身体不换灵魂）—— 挂死按失败处理，绝不锁住设置 */
   const refreshBodies = useCallback(async () => {
-    try {
-      const [bodies, currentId] = await Promise.all([
-        window.inkAPI.listBodies(),
-        window.inkAPI.getCurrentBodyId()
-      ])
-      setBodies(bodies)
-      const current = bodies.find((b: AvatarDescriptor) => b.id === currentId) ?? bodies[0] ?? null
-      setCurrentBody(current)
-    } catch {}
+    const result = await withTimeout(Promise.all([
+      window.inkAPI.listBodies(),
+      window.inkAPI.getCurrentBodyId()
+    ]), 4000)
+    if (!result) return
+    const [bodies, currentId] = result
+    setBodies(bodies)
+    const current = bodies.find((b: AvatarDescriptor) => b.id === currentId) ?? bodies[0] ?? null
+    setCurrentBody(current)
   }, [setBodies, setCurrentBody])
 
   const handleChangeBody = useCallback(async (id: string) => {
@@ -113,22 +129,12 @@ export default function App() {
     return r.success
   }, [setCurrentBody])
 
-  // Init
+  // Init — 首次启动流程：先显示砚灵，后台再初始化 AI。
+  // 任何一步失败（含 IPC 挂死）都不阻塞「看到砚灵」。
   useEffect(() => {
-    async function init() {
-      try {
-        const [hasModel, firstLaunch] = await Promise.all([
-          window.inkAPI.hasModel(),
-          window.inkAPI.getConfig('first_launch')
-        ])
-        if (!hasModel && firstLaunch !== 'false') {
-          await window.inkAPI.setPanelMode()
-          setMode('panel'); setScreen('wizard'); setLoading(false); return
-        }
-      } catch {}
+    let cancelled = false
 
-      await refreshBodies()
-      // Restore the most recent conversation so the pet remembers
+    async function restoreBackgroundState() {
       try {
         const history = await window.inkAPI.getChatHistory()
         if (history.length > 0) setMessages(history as any)
@@ -141,10 +147,71 @@ export default function App() {
         const name = await window.inkAPI.getConfig('pet_name')
         if (name) setPetName(name)
       } catch {}
-      setLoading(false)
     }
+
+    async function init() {
+      // 阶段 0：安全模式恢复（主进程持久标志 —— reload 后依然生效）
+      try {
+        const sm = await withTimeout(window.inkAPI.getSafeMode(), 2000)
+        if (sm && !cancelled) {
+          setSafeMode(true)
+          setCurrentBody(BUILTIN_BODY_DESCRIPTOR)
+        }
+      } catch {}
+
+      // 阶段 1：最快路径决定首屏（新用户向导 / 老用户桌宠）
+      try {
+        const result = await withTimeout(Promise.all([
+          window.inkAPI.hasModel(),
+          window.inkAPI.getConfig('first_launch')
+        ]), 4000)
+        if (result && !cancelled) {
+          const [hasModel, firstLaunch] = result
+          if (!hasModel && firstLaunch !== 'false') {
+            await window.inkAPI.setPanelMode()
+            if (cancelled) return
+            setMode('panel'); setScreen('wizard'); setLoading(false); return
+          }
+        }
+      } catch {}
+
+      // 阶段 2：加载默认身体 → 显示砚灵（4s 超时护栏；失败 → 内置「砚」兜底）
+      try {
+        const result = await withTimeout(Promise.all([
+          window.inkAPI.listBodies(),
+          window.inkAPI.getCurrentBodyId()
+        ]), 4000)
+        if (result && !cancelled) {
+          const [bodies, currentId] = result
+          setBodies(bodies)
+          const current = bodies.find((b: AvatarDescriptor) => b.id === currentId) ?? bodies[0] ?? null
+          setCurrentBody(current)
+        }
+      } catch {}
+      if (cancelled) return
+      setLoading(false)
+
+      // 阶段 3：后台初始化 AI 状态（历史/模型信息/名字）—— 永不阻塞砚灵
+      void restoreBackgroundState()
+    }
+
     init()
-  }, [refreshBodies])
+    return () => { cancelled = true }
+  }, [setBodies, setCurrentBody, setMessages, setModelInfo, setPetName])
+
+  // Safe mode（主进程：渲染进程第二次崩溃后触发）→ 强制内置「砚」，不再加载重资产
+  useEffect(() => {
+    const unsub = window.inkAPI.onSafeMode(() => {
+      setSafeMode(true)
+      setCurrentBody(BUILTIN_BODY_DESCRIPTOR)
+    })
+    return unsub
+  }, [setCurrentBody])
+
+  // 清理诞生动画计时器
+  useEffect(() => () => {
+    if (birthTimer.current) clearTimeout(birthTimer.current)
+  }, [])
 
   useEffect(() => {
     const unsub = window.inkAPI.onWindowMode((newMode) => {
@@ -203,13 +270,13 @@ export default function App() {
       if (!r.success) {
         const msg = r.budgetBlocked
           ? '预算已用完…我们先用本地模型聊天吧？'
-          : (r.error || '抱歉，我暂时无法回应...')
+          : (r.error || '砚灵暂时联系不上它的大脑。你可以检查一下 AI 设置。')
         appendAssistantChunk(msg)
         finishAssistantMessage(); setExpression('sad')
         transition('failed')
       }
     } catch {
-      appendAssistantChunk('\u62b1\u6b49\uff0c\u6211\u6682\u65f6\u65e0\u6cd5\u56de\u5e94...')
+      appendAssistantChunk('\u7814\u7075\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\u5b83\u7684\u5927\u8111\u3002\u4f60\u53ef\u4ee5\u68c0\u67e5\u4e00\u4e0b AI \u8bbe\u7f6e\u3002')
       finishAssistantMessage(); setExpression('sad')
       transition('failed')
     }
@@ -218,9 +285,21 @@ export default function App() {
   const handleWizardComplete = useCallback(async () => {
     await refreshBodies()
     setScreen('desktop'); window.inkAPI.setPetMode()
+    // 砚灵诞生：首次见面向导完成后 1.4s 欢迎动画（纯展示，不阻塞任何初始化）
+    setBirth(true)
+    if (birthTimer.current) clearTimeout(birthTimer.current)
+    birthTimer.current = setTimeout(() => setBirth(false), 1400)
   }, [refreshBodies])
 
-  if (loading) return <div className="app-container" style={{ background: 'var(--bg)', borderRadius: 'var(--radius-lg)' }} />
+  // Loading：窗口已显示但身体还没就绪 —— 直接展示内置「砚」，
+  // 保证「5 秒内砚灵出现」不依赖任何 IPC（挂死/超时也不空白）
+  if (loading) {
+    return (
+      <div className="pet-mode-root">
+        <BuiltinFace size={140} onClick={handlePetClick} />
+      </div>
+    )
+  }
 
   if (screen === 'wizard') {
     return (
@@ -231,31 +310,40 @@ export default function App() {
   }
 
   if (mode === 'pet') {
+    // 永远显示砚灵：currentBody 为空（IPC 挂死/身体列表空）→ 内置「砚」兜底
+    const body = safeMode ? BUILTIN_BODY_DESCRIPTOR : (currentBody ?? BUILTIN_BODY_DESCRIPTOR)
     return (
-      <div className="pet-mode-root">
-        {currentBody ? (
-          <PetView body={currentBody} expression={expression} mood={mood} activity={activity} temperament={temperament ?? undefined} onClick={handlePetClick} onContextMenu={handlePetContextMenu} />
-        ) : (
-          <div className="pet-mode-root" />
-        )}
-      </div>
+      <ErrorBoundary fallback={
+        <div className="pet-mode-root" onClick={handlePetClick} onContextMenu={handlePetContextMenu}>
+          <BuiltinFace size={140} onClick={handlePetClick} />
+        </div>
+      }>
+        <PetView body={body} expression={expression} mood={mood} activity={activity} temperament={temperament ?? undefined} onClick={handlePetClick} onContextMenu={handlePetContextMenu} />
+        {birth && <div className="pet-birth">✨ 砚灵正在诞生…</div>}
+      </ErrorBoundary>
     )
   }
 
   const exprToState: Record<string, string> = { neutral: 'idle', happy: 'happy', sad: 'sad', surprised: 'surprised', love: 'love' }
   const panelState = panel === 'chat' ? (exprToState[expression] ?? 'idle') : 'idle'
+  const body = safeMode ? BUILTIN_BODY_DESCRIPTOR : (currentBody ?? BUILTIN_BODY_DESCRIPTOR)
 
   return (
     <div className="app-container">
       <div className="main-content">
         <div style={{ display: panel === 'chat' ? 'flex' : 'none', height: '100%' }}>
-          {currentBody && (
-            <ChatView body={currentBody} state={panelState as any} messages={messages} isStreaming={isStreaming} activity={activity} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onBackToPet={handleBackToPet} onOpenSettings={() => setPanel('settings')} active={panel === 'chat'} petName={petName} />
-          )}
+          <ErrorBoundary fallback={
+            <div className="app-container" style={{ padding: 20 }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>聊天面板出了点问题，已自动降级（安全模式）。</p>
+              <button className="wizard-btn primary" style={{ marginTop: 12 }} onClick={handleBackToPet}>返回砚灵</button>
+            </div>
+          }>
+            <ChatView body={body} state={panelState as any} messages={messages} isStreaming={isStreaming} activity={activity} modelInfo={modelInfo} lastRoute={lastRoute} onSend={handleSend} onBackToPet={handleBackToPet} onOpenSettings={() => setPanel('settings')} active={panel === 'chat'} petName={petName} />
+          </ErrorBoundary>
         </div>
         <div style={{ display: panel === 'settings' ? 'block' : 'none', height: '100%' }}>
           <ErrorBoundary>
-            <SettingsView bodies={bodies} currentBodyId={currentBody?.id ?? null} onChangeBody={handleChangeBody} onRefreshBodies={refreshBodies} onBack={() => setPanel('chat')} onBackToPet={handleBackToPet} />
+            <SettingsView bodies={bodies} currentBodyId={body.id} onChangeBody={handleChangeBody} onRefreshBodies={refreshBodies} onBack={() => setPanel('chat')} onBackToPet={handleBackToPet} safeMode={safeMode} />
           </ErrorBoundary>
         </div>
       </div>

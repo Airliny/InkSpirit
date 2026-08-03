@@ -2,8 +2,9 @@ import { ipcMain, app } from 'electron'
 import { getMainWindow, toggleAlwaysOnTop, setPetMode, setPanelMode, toggleMode, moveWindowBy, moveWindowTo, startWindowDrag, updateWindowDrag, endWindowDrag } from '../windowManager'
 import { showPetContextMenu } from '../trayManager'
 import { logTo, logsDirectory, type LogCategory } from '../logs'
+import { isSafeModeActive } from '../safeMode'
 import { getDatabaseState } from '../../core/database'
-import { getOrCreateSoulManifest } from '../../core/soul/manifest'
+import { getOrCreateSoulManifest, computeLiveContinuityHash } from '../../core/soul/manifest'
 import { getConfig } from '../../core/config'
 import { getSecureConfig } from '../../core/secureStore'
 import fs from 'fs'
@@ -24,8 +25,12 @@ export function registerSystemHandlers(): void {
   ipcMain.handle('diagnostics:get', () => {
     const db = getDatabaseState()
     let soulId: string | null = null
+    let continuityOk = false
     try {
-      soulId = getOrCreateSoulManifest(app.getVersion()).soulId
+      const manifest = getOrCreateSoulManifest(app.getVersion())
+      soulId = manifest.soulId
+      // 灵魂连续性：身份存在 + 核心（身份/人格/关系/记忆）指纹可计算
+      continuityOk = computeLiveContinuityHash(manifest.soulId) !== null
     } catch {
       soulId = null
     }
@@ -47,12 +52,17 @@ export function registerSystemHandlers(): void {
       uptimeSec: Math.round(process.uptime()),
       logsDir: logsDirectory(),
       db: { status: db.status, lastError: db.lastError },
-      soul: { soulId },
+      soul: { soulId, continuityOk },
       brain: { provider, model, configured: !!getSecureConfig(`${provider}_api_key`) },
       body: { currentBodyId, modelType },
       gpu,
       updater: { enabled: app.isPackaged }
     }
+  })
+
+  /** Safe mode 查询：渲染进程 reload 后恢复安全模式（标志持久在主进程） */
+  ipcMain.handle('system:getSafeMode', () => {
+    return isSafeModeActive()
   })
 
   ipcMain.handle('window:minimize', () => {

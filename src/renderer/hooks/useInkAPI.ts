@@ -9,7 +9,7 @@ declare global {
       getDiagnostics: () => Promise<{
         version: string; platform: string; arch: string; electron: string; uptimeSec: number; logsDir: string
         db: { status: string; lastError: string | null }
-        soul: { soulId: string | null }
+        soul: { soulId: string | null; continuityOk: boolean }
         brain: { provider: string; model: string | null; configured: boolean }
         body: { currentBodyId: string | null; modelType: string }
         gpu: Record<string, string>
@@ -104,6 +104,9 @@ declare global {
       onPetMood: (callback: (data: { mood: string }) => void) => () => void
       onPetSoul: (callback: (data: { energy: number; attachment: number }) => void) => () => void
       onPetUserReturned: (callback: () => void) => () => void
+      // Safe mode（渲染进程第二次崩溃后主进程触发）：只渲染内置「砚」
+      onSafeMode: (callback: () => void) => () => void
+      getSafeMode: () => Promise<boolean>
 
       // Local models (Ollama)
       getOllamaStatus: () => Promise<{ running: boolean; version?: string; error?: string }>

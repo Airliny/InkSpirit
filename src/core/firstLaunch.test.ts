@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildBodyDescriptors, resolveCurrentBodyId, BUILTIN_BODY_ID, SPRITE_BODY_ID, LIVE2D_BODY_ID, VRM_BODY_ID } from './avatar/bodies'
+import { buildBodyDescriptors, resolveCurrentBodyId, BUILTIN_BODY_ID, BUILTIN_BODY_DESCRIPTOR, SPRITE_BODY_ID, LIVE2D_BODY_ID, VRM_BODY_ID } from './avatar/bodies'
 import type { SpriteSource } from './avatar/types'
 
 /**
@@ -14,6 +14,14 @@ describe('全新安装：无任何模型资产', () => {
     expect(bodies.length).toBeGreaterThan(0)
     expect(bodies[0].id).toBe(BUILTIN_BODY_ID)
     expect(bodies[0].type).toBe('builtin')
+  })
+
+  it('BUILTIN_BODY_DESCRIPTOR 恒可用：无需 IPC/资产，渲染层可直接兜底', () => {
+    // v0.9.3 P0：currentBody 为空（IPC 挂死/列表空）→ 渲染层用纯客户端常量兜底
+    expect(BUILTIN_BODY_DESCRIPTOR.id).toBe(BUILTIN_BODY_ID)
+    expect(BUILTIN_BODY_DESCRIPTOR.type).toBe('builtin')
+    expect(BUILTIN_BODY_DESCRIPTOR.source.kind).toBe('builtin')
+    expect(BUILTIN_BODY_DESCRIPTOR).toEqual(buildBodyDescriptors({}, null, null)[0])
   })
 
   it('当前身体解析 → 内置「砚」', () => {

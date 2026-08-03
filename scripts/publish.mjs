@@ -104,7 +104,8 @@ async function main() {
     name: `InkSpirit ${version}`,
     body,
     draft: false,
-    prerelease: false
+    // rc/beta 版本标记为预发布（GitHub 不让预发布版本成为最新版）
+    prerelease: version.includes('-')
   }))
   const relId = rel.id
   if (!relId) { console.error('Failed to create release:', JSON.stringify(rel)); process.exit(1) }
